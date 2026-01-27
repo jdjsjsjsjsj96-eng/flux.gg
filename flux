@@ -5,17 +5,22 @@ local UIS = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
+--// ================= CONFIG =================
+local CONFIG = getgenv().Configurations
+local wsConfig = getgenv().walkSpeedSettings
+
+assert(CONFIG, "Configurations table not found")
+assert(wsConfig, "WalkSpeedSettings table not found")
+
 --// ================= VARIABLES =================
--- Aimbot
+-- Camera Aimbot
 local holding = false
 local target = nil
-local aimbotKey = Enum.KeyCode[getgenv().aimbotv1.binds['camera aimbot']]
-local CONFIG = getgenv().aimbotv1
+local aimbotKey = Enum.KeyCode[CONFIG.binds['camera aimbot']]
 
 -- WalkSpeed
 local wsEnabled = false
 local defaultSpeed = 16
-local wsConfig = getgenv().walkSpeedSettings
 local wsKey = Enum.KeyCode[wsConfig.Activation.WalkSpeedKey]
 
 --// ================= INPUT =================
@@ -23,19 +28,21 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
 
     -- Camera Aimbot
-    if input.KeyCode == aimbotKey then
+    if CONFIG.camera_aimbot.enabled and input.KeyCode == aimbotKey then
         if CONFIG.camera_aimbot.mode == "Toggle" then
             holding = not holding
-        else -- Hold mode
+        else
             holding = true
         end
     end
 
     -- WalkSpeed
-    if input.KeyCode == wsKey then
+    if wsConfig.WalkSpeed.Enabled and input.KeyCode == wsKey then
         if wsConfig.Activation.Mode == "Toggle" then
             wsEnabled = not wsEnabled
         elseif wsConfig.Activation.Mode == "Hold" then
+            wsEnabled = true
+        elseif wsConfig.Activation.Mode == "Always" then
             wsEnabled = true
         end
     end
@@ -43,12 +50,12 @@ end)
 
 UIS.InputEnded:Connect(function(input)
     -- Camera Aimbot
-    if input.KeyCode == aimbotKey and CONFIG.camera_aimbot.mode == "Hold" then
+    if CONFIG.camera_aimbot.enabled and input.KeyCode == aimbotKey and CONFIG.camera_aimbot.mode == "Hold" then
         holding = false
     end
 
     -- WalkSpeed
-    if input.KeyCode == wsKey and wsConfig.Activation.Mode == "Hold" then
+    if wsConfig.WalkSpeed.Enabled and input.KeyCode == wsKey and wsConfig.Activation.Mode == "Hold" then
         wsEnabled = false
     end
 end)
@@ -82,13 +89,15 @@ end
 --// ================= MAIN LOOP =================
 RunService.RenderStepped:Connect(function()
     -- Camera Aimbot
-    if not CONFIG.camera_aimbot.enabled then
-        target = nil
-        holding = false
-    elseif holding then
-        target = GetClosestTarget()
+    if CONFIG.camera_aimbot.enabled then
+        if holding then
+            target = GetClosestTarget()
+        else
+            target = nil
+        end
     else
         target = nil
+        holding = false
     end
 
     -- WalkSpeed
