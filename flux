@@ -31,7 +31,7 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
     if CONFIG.camera_aimbot.enabled and input.KeyCode == aimbotKey then
         if CONFIG.camera_aimbot.mode == "Toggle" then
             holding = not holding
-        else
+        else -- Hold mode
             holding = true
         end
     end
@@ -91,8 +91,19 @@ RunService.RenderStepped:Connect(function()
     -- Camera Aimbot
     if CONFIG.camera_aimbot.enabled then
         if holding then
-            target = GetClosestTarget()
+            if CONFIG.camera_aimbot.sticky then
+                -- Sticky aim logic: only switch if current target dies or is invalid
+                if not target or not target.Parent
+                   or not target.Parent:FindFirstChildOfClass("Humanoid")
+                   or target.Parent:FindFirstChildOfClass("Humanoid").Health <= 0 then
+                    target = GetClosestTarget()
+                end
+            else
+                -- Normal aimbot behavior (always picks closest)
+                target = GetClosestTarget()
+            end
         else
+            -- Unlock target
             target = nil
         end
     else
@@ -129,7 +140,8 @@ end)
 --// ================= CAMERA AIM =================
 RunService.RenderStepped:Connect(function()
     if not CONFIG.camera_aimbot.enabled or not holding or not target then return end
-    if target.Parent:FindFirstChildOfClass("Humanoid") then
+    local hum = target.Parent:FindFirstChildOfClass("Humanoid")
+    if hum and hum.Health > 0 then
         local cf = Camera.CFrame
         local aimCF = CFrame.new(cf.Position, target.Position)
         Camera.CFrame = cf:Lerp(aimCF, 1) -- smoothness = 100
