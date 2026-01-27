@@ -2,6 +2,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -16,20 +17,19 @@ assert(WS, "walkSpeedSettings table not found")
 assert(JS, "jumpSettings table not found")
 
 --// ================= VARIABLES =================
--- Aimbot
 local holding = false
 local target = nil
 local aimbotKey = Enum.KeyCode[CONFIG.binds['camera aimbot']]
 
--- WalkSpeed
 local wsEnabled = false
 local defaultSpeed = 16
 local wsKey = Enum.KeyCode[WS.Activation.WalkSpeedKey]
 
--- Jump
 local jumpEnabled = false
 local defaultJump = 50
 local jumpKey = Enum.KeyCode[JS.Activation.JumpKey]
+
+local lastAutoAirShot = 0
 
 --// ================= FOV CIRCLE =================
 local FOV = Drawing.new("Circle")
@@ -43,7 +43,38 @@ FOV.Color = Color3.fromRGB(
     CONFIG.fov_circle.color[3]
 )
 
---// ================= INPUT =================
+--// ================= HELPER FUNCTIONS =================
+local function IsTargetAirborne(humanoid)
+    if not humanoid then return false end
+    local state = humanoid:GetState()
+    return state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.Freefall
+end
+
+local function GetClosestTarget()
+    local closest, shortest = nil, math.huge
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character then
+            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+            local part = plr.Character:FindFirstChild(CONFIG.targeting.hitpart)
+            if hum and hum.Health > 0 and part then
+                local pos, onscreen = Camera:WorldToScreenPoint(part.Position)
+                if onscreen then
+                    local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                    if dist <= CONFIG.fov_circle.size and dist < shortest then
+                        shortest = dist
+                        closest = part
+                    end
+                end
+            end
+        end
+    end
+
+    return closest
+end
+
+--// ================= INPUT HANDLING =================
 UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
 
@@ -63,14 +94,18 @@ UIS.InputBegan:Connect(function(input, gpe)
             wsEnabled = not wsEnabled
         elseif WS.Activation.Mode == "Hold" then
             wsEnabled = true
+        elseif WS.Activation.Mode == "Always" then
+            wsEnabled = true
         end
     end
 
-    -- Jump
+    -- JumpPower
     if JS.Jump.Enabled and input.KeyCode == jumpKey then
         if JS.Activation.Mode == "Toggle" then
             jumpEnabled = not jumpEnabled
         elseif JS.Activation.Mode == "Hold" then
+            jumpEnabled = true
+        elseif JS.Activation.Mode == "Always" then
             jumpEnabled = true
         end
     end
@@ -82,40 +117,14 @@ UIS.InputEnded:Connect(function(input)
         target = nil
     end
 
-    if input.KeyCode == wsKey and WS.Activation.Mode == "Hold" then
+    if WS.WalkSpeed.Enabled and input.KeyCode == wsKey and WS.Activation.Mode == "Hold" then
         wsEnabled = false
     end
 
-    if input.KeyCode == jumpKey and JS.Activation.Mode == "Hold" then
+    if JS.Jump.Enabled and input.KeyCode == jumpKey and JS.Activation.Mode == "Hold" then
         jumpEnabled = false
     end
 end)
-
---// ================= TARGET SELECTION =================
-local function GetClosestTarget()
-    local closest, shortest = nil, math.huge
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character then
-            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-            local part = plr.Character:FindFirstChild(CONFIG.targeting.hitpart)
-
-            if hum and hum.Health > 0 and part then
-                local pos, onscreen = Camera:WorldToScreenPoint(part.Position)
-                if onscreen then
-                    local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
-                    if dist <= CONFIG.fov_circle.size and dist < shortest then
-                        shortest = dist
-                        closest = part
-                    end
-                end
-            end
-        end
-    end
-
-    return closest
-end
 
 --// ================= MAIN LOOP =================
 RunService.RenderStepped:Connect(function()
@@ -140,24 +149,45 @@ RunService.RenderStepped:Connect(function()
         target = nil
     end
 
+    -- WalkSpeed / JumpPower
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChild("Humanoid")
-
     if hum then
         -- WalkSpeed
         if WS.WalkSpeed.Enabled then
-            if WS.Activation.Mode == "Always" then
-                wsEnabled = true
-            end
+            if WS.Activation.Mode == "Always" then wsEnabled = true end
             hum.WalkSpeed = wsEnabled and WS.WalkSpeed.Speed or defaultSpeed
         end
 
         -- JumpPower
         if JS.Jump.Enabled then
-            if JS.Activation.Mode == "Always" then
-                jumpEnabled = true
-            end
+            if JS.Activation.Mode == "Always" then jumpEnabled = true end
             hum.JumpPower = jumpEnabled and JS.Jump.Power or defaultJump
+        end
+    end
+
+    -- Auto Air (shoot + lock)
+    if target then
+        local targetHum = target.Parent:FindFirstChildOfClass("Humanoid")
+        if targetHum and targetHum.Health > 0 then
+            if IsTargetAirborne(targetHum) then
+                -- Auto Air Lock
+                if CONFIG.auto_air.lock.enabled then
+                    target = target -- sticky ensures we stay locked
+                end
+
+                -- Auto Air Shoot
+                if CONFIG.auto_air.shoot.enabled then
+                    local now = tick()
+                    if now - lastAutoAirShot >= CONFIG.auto_air.shoot.delay then
+                        lastAutoAirShot = now
+                        -- simulate left click
+                        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                        task.wait()
+                        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+                    end
+                end
+            end
         end
     end
 end)
@@ -170,7 +200,7 @@ RunService.RenderStepped:Connect(function()
     if hum and hum.Health > 0 then
         local cf = Camera.CFrame
         local aimCF = CFrame.new(cf.Position, target.Position)
-        Camera.CFrame = cf:Lerp(aimCF, 1)
+        Camera.CFrame = cf:Lerp(aimCF, CONFIG.camera_aimbot.smoothness)
     else
         target = nil
     end
