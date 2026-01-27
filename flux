@@ -167,25 +167,23 @@ RunService.RenderStepped:Connect(function()
     end
 
     -- Auto Air (shoot + lock)
-    if target then
+    if target and CONFIG.auto_air then
         local targetHum = target.Parent:FindFirstChildOfClass("Humanoid")
-        if targetHum and targetHum.Health > 0 then
-            if IsTargetAirborne(targetHum) then
-                -- Auto Air Lock
-                if CONFIG.auto_air.lock.enabled then
-                    target = target -- sticky ensures we stay locked
-                end
+        if targetHum and targetHum.Health > 0 and IsTargetAirborne(targetHum) then
+            -- Auto Air Lock
+            if CONFIG.auto_air.lock and CONFIG.auto_air.lock.enabled then
+                target = target -- sticky ensures we stay locked
+            end
 
-                -- Auto Air Shoot
-                if CONFIG.auto_air.shoot.enabled then
-                    local now = tick()
-                    if now - lastAutoAirShot >= CONFIG.auto_air.shoot.delay then
-                        lastAutoAirShot = now
-                        -- simulate left click
-                        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-                        task.wait()
-                        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-                    end
+            -- Auto Air Shoot
+            if CONFIG.auto_air.shoot and CONFIG.auto_air.shoot.enabled then
+                local now = tick()
+                if now - lastAutoAirShot >= CONFIG.auto_air.shoot.delay then
+                    lastAutoAirShot = now
+                    -- simulate left click
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+                    task.wait()
+                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
                 end
             end
         end
