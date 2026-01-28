@@ -187,21 +187,21 @@ if CONFIG.name_esp.enabled then
         local text = Drawing.new("Text")
         text.Visible = false
         text.Center = true
-        text.Outline = false
+        text.Outline = true -- make it visible on all backgrounds
         text.Font = 3
         text.Size = CONFIG.name_esp.size
-        text.Color = Color3.fromRGB(unpack(CONFIG.name_esp.color))
+        text.Color = Color3.fromRGB(table.unpack(CONFIG.name_esp.color))
 
         local conn
         conn = RunService.RenderStepped:Connect(function()
-            if hum.Health <= 0 or not character.Parent then
+            if not hum or hum.Health <= 0 or not character.Parent then
                 text:Remove()
                 conn:Disconnect()
                 return
             end
 
-            local headPos, onscreen = Camera:WorldToViewportPoint(head.Position)
-            if onscreen then
+            local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+            if onScreen and headPos.Z > 0 then -- make sure it's in front of camera
                 local offset = Vector2.new(0,0)
                 if CONFIG.name_esp.position == "Above" then offset = Vector2.new(0,-27)
                 elseif CONFIG.name_esp.position == "Below" then offset = Vector2.new(0,27)
