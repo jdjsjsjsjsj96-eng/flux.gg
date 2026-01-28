@@ -339,17 +339,20 @@ end
 -- Update Silent Aim FOV & Tracer
 RunService.RenderStepped:Connect(function()
     local guiInset = GuiService:GetGuiInset()
+
+    -- FOV Circle (can keep offset if you want)
     circle.Position = Vector2.new(Mouse.X, Mouse.Y + guiInset.Y)
     circle.Radius = SilentConfig.FOVRadius
     circle.Visible = SilentConfig.FOVVisible and SilentActive()
 
+    -- Tracer (fixed to actual mouse, no guiInset)
     local targetPlayer = GetClosestForSilent()
     if SilentActive() and targetPlayer and targetPlayer.Character then
         local part = GetClosestPartSilent(targetPlayer.Character)
         if part then
             local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
             if onScreen then
-                local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+                local mousePos = Vector2.new(Mouse.X, Mouse.Y) -- <- FIXED, removed guiInset.Y
                 local diff = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
                 if diff <= SilentConfig.FOVRadius then
                     tracer.From = mousePos
@@ -368,6 +371,7 @@ RunService.RenderStepped:Connect(function()
         tracer.Visible = false
     end
 end)
+
 
 -- Silent Aim Input
 UIS.InputBegan:Connect(function(input, gpe)
