@@ -197,89 +197,89 @@ end)
 
 --// ================= NAME ESP =================
 if CONFIG.name_esp.enabled then
-    local ESPs = {} -- store ESPs per player
+    local Camera = workspace.CurrentCamera
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local LocalPlayer = Players.LocalPlayer
 
-    local function createESP(player)
-        if ESPs[player] then return end
-        local character = player.Character
-        if not character then return end
+    local function esp(player, character)
+        local hum = character:WaitForChild("Humanoid")
+        local hrp = character:WaitForChild("HumanoidRootPart")
 
-        local hum = character:FindFirstChild("Humanoid")
-        local head = character:FindFirstChild("Head")
-        if not hum or not head then return end
-
-        -- Create the Drawing text once
         local text = Drawing.new("Text")
-        text.Visible = true
+        text.Visible = false
         text.Center = true
         text.Outline = true
-        text.Font = 3
-        text.Size = CONFIG.name_esp.size
+        text.Font = 2
         text.Color = Color3.fromRGB(table.unpack(CONFIG.name_esp.color))
+        text.Size = CONFIG.name_esp.size
 
-        ESPs[player] = {Text = text, Humanoid = hum, Head = head}
+        local c1, c2, c3
 
-        hum.Died:Connect(function()
+        local function cleanup()
+            text.Visible = false
             text:Remove()
-            ESPs[player] = nil
+            if c1 then c1:Disconnect() c1 = nil end
+            if c2 then c2:Disconnect() c2 = nil end
+            if c3 then c3:Disconnect() c3 = nil end
+        end
+
+        -- Remove ESP when character leaves
+        c2 = character.AncestryChanged:Connect(function(_, parent)
+            if not parent then cleanup() end
         end)
-    end
 
-    local function removeESP(player)
-        if ESPs[player] then
-            ESPs[player].Text:Remove()
-            ESPs[player] = nil
-        end
-    end
+        -- Remove ESP on death
+        c3 = hum.HealthChanged:Connect(function(health)
+            if health <= 0 or hum:GetState() == Enum.HumanoidStateType.Dead then
+                cleanup()
+            end
+        end)
 
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            createESP(player)
-            player.CharacterAdded:Connect(function()
-                createESP(player)
-            end)
-        end
-    end
+        -- Update ESP every frame
+        c1 = RunService.RenderStepped:Connect(function()
+            if not hum or hum.Health <= 0 or not hrp.Parent then
+                text.Visible = false
+                return
+            end
 
-    Players.PlayerAdded:Connect(function(player)
-        if player ~= LocalPlayer then
-            createESP(player)
-            player.CharacterAdded:Connect(function()
-                createESP(player)
-            end)
-        end
-    end)
-
-    Players.PlayerRemoving:Connect(removeESP)
-
-    RunService.RenderStepped:Connect(function()
-        for player, esp in pairs(ESPs) do
-            local hum = esp.Humanoid
-            local head = esp.Head
-            local text = esp.Text
-
-            if hum and hum.Health > 0 and head and head.Parent then
-                local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-                if onScreen and headPos.Z > 0 then
-                    local offset = Vector2.new(0,0)
-                    if CONFIG.name_esp.position == "Above" then offset = Vector2.new(0,-27)
-                    elseif CONFIG.name_esp.position == "Below" then offset = Vector2.new(0,27)
-                    elseif CONFIG.name_esp.position == "Left" then offset = Vector2.new(-50,0)
-                    elseif CONFIG.name_esp.position == "Right" then offset = Vector2.new(50,0)
-                    end
-
-                    text.Position = Vector2.new(headPos.X, headPos.Y) + offset
-                    text.Text = "[ "..player.Name.." ]"
-                    text.Visible = true
-                else
-                    text.Visible = false
+            local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+            if onScreen and pos.Z > 0 then
+                local offset = Vector2.new(0, 0)
+                if CONFIG.name_esp.position == "Above" then offset = Vector2.new(0, -27)
+                elseif CONFIG.name_esp.position == "Below" then offset = Vector2.new(0, 27)
+                elseif CONFIG.name_esp.position == "Left" then offset = Vector2.new(-50, 0)
+                elseif CONFIG.name_esp.position == "Right" then offset = Vector2.new(50, 0)
                 end
+
+                text.Position = Vector2.new(pos.X, pos.Y) + offset
+                text.Text = "[ "..player.Name.." ]"
+                text.Visible = true
             else
                 text.Visible = false
             end
+        end)
+    end
+
+    local function onPlayerAdded(player)
+        if player == LocalPlayer then return end
+        if player.Character then
+            esp(player, player.Character)
         end
-    end)
+        player.CharacterAdded:Connect(function(char)
+            esp(player, char)
+        end)
+    end
+
+    -- Add existing players
+    for _, player in ipairs(Players:GetPlayers()) do
+        onPlayerAdded(player)
+    end
+
+    -- Add new players
+    Players.PlayerAdded:Connect(onPlayerAdded)
 end
+
 
 --// ================= SILENT AIM =================
 local SilentConfig = CONFIG.silent_aim
