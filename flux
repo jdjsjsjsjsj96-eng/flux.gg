@@ -195,6 +195,12 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     target = nil
 end)
 
+--// ================= NAME ESP (REPLACEMENT) =================
+local c = workspace.CurrentCamera
+local ps = game:GetService("Players")
+local lp = ps.LocalPlayer
+local rs = game:GetService("RunService")
+
 local function esp(player, character)
     if not CONFIG.name_esp.enabled then return end
 
@@ -238,7 +244,7 @@ local function esp(player, character)
 
         local pos, onScreen = c:WorldToViewportPoint(hrp.Position)
         if onScreen then
-            text.Position = Vector2.new(pos.X, pos.Y - 15) -- same offset as before
+            text.Position = Vector2.new(pos.X, pos.Y - 15)
             text.Text = player.Name
             text.Size = CONFIG.name_esp.size
             text.Visible = true
@@ -248,7 +254,22 @@ local function esp(player, character)
     end)
 end
 
+local function p_added(p)
+    if p.Character then
+        esp(p, p.Character)
+    end
+    p.CharacterAdded:Connect(function(cr)
+        esp(p, cr)
+    end)
+end
 
+for _, p in ipairs(ps:GetPlayers()) do
+    if p ~= lp then
+        p_added(p)
+    end
+end
+
+ps.PlayerAdded:Connect(p_added)
 
 
 --// ================= SILENT AIM =================
