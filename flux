@@ -197,40 +197,57 @@ end)
 
 --// ================= NAME ESP (LOCK INSPECTION) =================
 if CONFIG.name_esp.enabled then
-    local LOCK = CONFIG.name_esp.lock_inspection
+    local LOCK = CONFIG.lock_inspection -- ✅ CORRECT SOURCE
 
     local function esp(player, char)
-        local hum = char:WaitForChild("Humanoid")
-        local hrp = char:WaitForChild("HumanoidRootPart")
+        local hum = char:WaitForChild("Humanoid", 5)
+        local hrp = char:WaitForChild("HumanoidRootPart", 5)
+        if not hum or not hrp then return end
 
         local text = Drawing.new("Text")
         text.Center = true
         text.Outline = true
         text.Font = 2
         text.Size = CONFIG.name_esp.size
+        text.Text = player.Name
+        text.Visible = false
 
         local function setColor(tbl)
             text.Color = Color3.fromRGB(tbl[1], tbl[2], tbl[3])
         end
 
         local function offset()
-            if CONFIG.name_esp.position == "Above" then return Vector2.new(0,-27)
-            elseif CONFIG.name_esp.position == "Below" then return Vector2.new(0,27)
-            elseif CONFIG.name_esp.position == "Left" then return Vector2.new(-50,0)
-            elseif CONFIG.name_esp.position == "Right" then return Vector2.new(50,0)
+            if CONFIG.name_esp.position == "Above" then
+                return Vector2.new(0, -27)
+            elseif CONFIG.name_esp.position == "Below" then
+                return Vector2.new(0, 27)
+            elseif CONFIG.name_esp.position == "Left" then
+                return Vector2.new(-50, 0)
+            elseif CONFIG.name_esp.position == "Right" then
+                return Vector2.new(50, 0)
             end
             return Vector2.zero
         end
 
         RunService.RenderStepped:Connect(function()
-            local pos, vis = Camera:WorldToViewportPoint(hrp.Position)
-            if not vis then text.Visible = false return end
+            if not char.Parent or hum.Health <= 0 then
+                text.Visible = false
+                return
+            end
 
-            text.Text = player.Name
+            local pos, vis = Camera:WorldToViewportPoint(hrp.Position)
+            if not vis then
+                text.Visible = false
+                return
+            end
+
             text.Position = Vector2.new(pos.X, pos.Y) + offset()
             text.Visible = true
 
-            if LOCK.enabled and _G.currentCameraTarget == hrp then
+            -- 🔵 LOCK INSPECTION COLOR LOGIC (FIXED)
+            if LOCK
+            and LOCK.enabled
+            and _G.currentCameraTarget == hrp then
                 setColor(LOCK.locked_color)
             else
                 setColor(LOCK.normal_color)
@@ -238,82 +255,22 @@ if CONFIG.name_esp.enabled then
         end)
     end
 
-    for _,p in ipairs(Players:GetPlayers()) do
+    for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer then
-            if p.Character then esp(p,p.Character) end
-            p.CharacterAdded:Connect(function(c) esp(p,c) end)
+            if p.Character then
+                esp(p, p.Character)
+            end
+            p.CharacterAdded:Connect(function(c)
+                esp(p, c)
+            end)
         end
     end
 
     Players.PlayerAdded:Connect(function(p)
-        p.CharacterAdded:Connect(function(c) esp(p,c) end)
+        if p ~= LocalPlayer then
+            p.CharacterAdded:Connect(function(c)
+                esp(p, c)
+            end)
+        end
     end)
 end
-
---// ================= SILENT AIM =================
-local SilentConfig = CONFIG.silent_aim
-local silentEnabled = SilentConfig.mode == "Always"
-local silentHolding = false
-local silentKey = Enum.KeyCode[SilentConfig.toggleKey]
-
-local circle = Drawing.new("Circle")
-circle.Color = Color3.fromRGB(table.unpack(CONFIG.fov_circle.color))
-circle.Thickness = CONFIG.fov_circle.thickness
-circle.Filled = CONFIG.fov_circle.filled
-
-local function SilentActive()
-    if not SilentConfig.enabled then return false end
-    if SilentConfig.mode == "Always" then return true end
-    if SilentConfig.mode == "Toggle" then return silentEnabled end
-    if SilentConfig.mode == "Hold" then return silentHolding end
-end
-
-RunService.RenderStepped:Connect(function()
-    local inset = GuiService:GetGuiInset()
-    circle.Position = Vector2.new(Mouse.X, Mouse.Y + inset.Y)
-    circle.Radius = SilentConfig.FOVRadius
-    circle.Transparency = SilentConfig.FOVTransparency
-    circle.Visible = SilentConfig.FOVVisible and SilentActive()
-end)
-
-UIS.InputBegan:Connect(function(i,g)
-    if g then return end
-    if i.KeyCode == silentKey then
-        if SilentConfig.mode == "Toggle" then silentEnabled = not silentEnabled
-        elseif SilentConfig.mode == "Hold" then silentHolding = true end
-    end
-end)
-
-UIS.InputEnded:Connect(function(i)
-    if i.KeyCode == silentKey then silentHolding = false end
-end)
-
-local function GetClosestSilent()
-    local best, dist = nil, SilentConfig.FOVRadius
-    for _,v in ipairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(SilentConfig.targetPart) then
-            local p, ok = Camera:WorldToScreenPoint(v.Character[SilentConfig.targetPart].Position)
-            if ok then
-                local d = (Vector2.new(p.X,p.Y) - Vector2.new(Mouse.X,Mouse.Y)).Magnitude
-                if d < dist then dist = d best = v end
-            end
-        end
-    end
-    return best
-end
-
-local mt = getrawmetatable(game)
-setreadonly(mt,false)
-local old = mt.__index
-
-mt.__index = function(self,k)
-    if SilentActive() and self == Mouse and k == "Hit" then
-        local t = GetClosestSilent()
-        if t then
-            local part = t.Character[SilentConfig.targetPart]
-            return part.CFrame + (part.Velocity * SilentConfig.prediction)
-        end
-    end
-    return old(self,k)
-end
-setreadonly(mt,true)
