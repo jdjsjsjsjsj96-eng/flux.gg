@@ -336,23 +336,21 @@ local function GetClosestForSilent()
     return closest
 end
 
--- Update Silent Aim FOV & Tracer
+-- Update Silent Aim FOV & Tracer (Perfect Mouse Alignment)
 RunService.RenderStepped:Connect(function()
-    local guiInset = GuiService:GetGuiInset()
-
-    -- FOV Circle (can keep offset if you want)
-    circle.Position = Vector2.new(Mouse.X, Mouse.Y + guiInset.Y)
+    -- FOV Circle
+    circle.Position = Vector2.new(Mouse.X, Mouse.Y) -- directly on mouse
     circle.Radius = SilentConfig.FOVRadius
     circle.Visible = SilentConfig.FOVVisible and SilentActive()
 
-    -- Tracer (fixed to actual mouse, no guiInset)
+    -- Tracer
     local targetPlayer = GetClosestForSilent()
     if SilentActive() and targetPlayer and targetPlayer.Character then
-        local part = GetClosestPartSilent(targetPlayer.Character)
+        local part = GetClosestPartSilent(targetPlayer.Character) -- use closest part function
         if part then
             local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
             if onScreen then
-                local mousePos = Vector2.new(Mouse.X, Mouse.Y) -- <- FIXED, removed guiInset.Y
+                local mousePos = Vector2.new(Mouse.X, Mouse.Y) -- no offsets at all
                 local diff = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
                 if diff <= SilentConfig.FOVRadius then
                     tracer.From = mousePos
@@ -371,6 +369,7 @@ RunService.RenderStepped:Connect(function()
         tracer.Visible = false
     end
 end)
+
 
 
 -- Silent Aim Input
