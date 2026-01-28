@@ -298,19 +298,12 @@ circle.Transparency = SilentConfig.FOV.transparency
 circle.Radius = SilentConfig.FOV.radius
 circle.Visible = SilentConfig.FOV.visible and silentEnabled
 
--- GUI Tracer (mouse → HumanoidRootPart)
-local screenGui = Instance.new("ScreenGui")
-screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-
-local tracerLine = Instance.new("Frame")
-tracerLine.BackgroundColor3 = Color3.new(1, 1, 1) -- white
-tracerLine.BorderSizePixel = 0
-tracerLine.AnchorPoint = Vector2.new(0.5, 0.5)
-tracerLine.Size = UDim2.new(0, 2, 0, 2) -- initial tiny size
-tracerLine.Position = UDim2.new(0, 0, 0, 0)
-tracerLine.Rotation = 0
-tracerLine.Visible = false
-tracerLine.Parent = screenGui
+-- Create Tracer (straight line from mouse → HRP)
+local tracer = Drawing.new("Line")
+tracer.Visible = false
+tracer.Thickness = 2
+tracer.Color = Color3.fromRGB(255, 255, 255)
+tracer.Transparency = 1
 
 -- Check if Silent Aim is active
 local function SilentActive()
@@ -321,7 +314,7 @@ local function SilentActive()
     return false
 end
 
--- Visibility check
+-- Visibility function
 local function IsVisible(part, character)
     if not part or not character then return false end
     if not CONFIG.visibility or not CONFIG.visibility.enabled then
@@ -394,7 +387,7 @@ RunService.RenderStepped:Connect(function()
     circle.Radius = SilentConfig.FOV.radius
     circle.Visible = SilentConfig.FOV.visible and SilentActive()
 
-    -- Tracer line
+    -- Tracer
     local target = GetClosestForSilent()
     if SilentActive() and target and target.Parent then
         local hrp = target.Parent:FindFirstChild("HumanoidRootPart")
@@ -402,21 +395,17 @@ RunService.RenderStepped:Connect(function()
             local hrpPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
             if onScreen then
                 local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-                local targetPos = Vector2.new(hrpPos.X, hrpPos.Y)
-                local angle = math.atan2(targetPos.Y - mousePos.Y, targetPos.X - mousePos.X)
-
-                tracerLine.Position = UDim2.new(0, (mousePos.X + targetPos.X)/2, 0, (mousePos.Y + targetPos.Y)/2)
-                tracerLine.Size = UDim2.new(0, 2, 0, (targetPos - mousePos).Magnitude)
-                tracerLine.Rotation = math.deg(angle)
-                tracerLine.Visible = true
+                tracer.From = mousePos
+                tracer.To = Vector2.new(hrpPos.X, hrpPos.Y)
+                tracer.Visible = true
             else
-                tracerLine.Visible = false
+                tracer.Visible = false
             end
         else
-            tracerLine.Visible = false
+            tracer.Visible = false
         end
     else
-        tracerLine.Visible = false
+        tracer.Visible = false
     end
 end)
 
