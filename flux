@@ -381,12 +381,12 @@ local function GetClosestForSilent()
     return closest
 end
 
--- Update FOV & Tracer
+-- Update FOV & Tracer (fixed to mouse center)
 RunService.RenderStepped:Connect(function()
     local guiInset = GuiService:GetGuiInset()
 
     -- FOV circle
-    circle.Position = Vector2.new(Mouse.X, Mouse.Y) -- always middle of mouse
+    circle.Position = Vector2.new(Mouse.X, Mouse.Y) -- middle of mouse
     circle.Radius = SilentConfig.FOV.radius
     circle.Visible = SilentConfig.FOV.visible and SilentActive()
 
@@ -395,6 +395,7 @@ RunService.RenderStepped:Connect(function()
     if SilentActive() and target and (not CONFIG.visibility.tracer or IsVisible(target, target.Parent)) then
         local pos, onScreen = Camera:WorldToViewportPoint(target.Position)
         if onScreen then
+            -- Correct the "From" position to the exact middle of mouse
             local mousePos = Vector2.new(Mouse.X, Mouse.Y)
             local diff = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
             if diff <= SilentConfig.FOV.radius then
