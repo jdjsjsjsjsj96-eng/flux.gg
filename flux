@@ -308,18 +308,15 @@ local silentHolding = false
 local silentKey = Enum.KeyCode[SilentConfig.toggleKey] or Enum.KeyCode.Unknown
 
 -- Create FOV Circle (matches aimbot style)
-local circle
-pcall(function()
-    circle = Drawing.new("Circle")
-    circle.Color = Color3.fromRGB(table.unpack(CONFIG.fov_circle.color))
-    circle.Thickness = CONFIG.fov_circle.thickness
-    circle.Filled = CONFIG.fov_circle.filled
-    circle.Transparency = SilentConfig.FOVTransparency
-    circle.Radius = SilentConfig.FOVRadius
-    circle.Visible = SilentConfig.FOVVisible and silentEnabled
-end)
+local circle = Drawing.new("Circle")
+circle.Color = Color3.fromRGB(table.unpack(CONFIG.fov_circle.color))
+circle.Thickness = CONFIG.fov_circle.thickness
+circle.Filled = CONFIG.fov_circle.filled
+circle.Transparency = SilentConfig.FOVTransparency
+circle.Radius = SilentConfig.FOVRadius
+circle.Visible = SilentConfig.FOVVisible and silentEnabled
 
---// ================= SILENT AIM TRACER =================
+-- Create Tracer
 local tracer = Drawing.new("Line")
 tracer.Visible = false
 tracer.Thickness = 1
@@ -334,36 +331,59 @@ local function SilentActive()
     return false
 end
 
+-- Find closest target inside FOV
+local function GetClosestForSilent()
+    local closest, distance = nil, SilentConfig.FOVRadius
+    for _, v in ipairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(SilentConfig.targetPart) then
+            local head = v.Character[SilentConfig.targetPart]
+            local pos, onScreen = Camera:WorldToScreenPoint(head.Position)
+            if onScreen then
+                local diff = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                if diff < distance then
+                    distance = diff
+                    closest = v
+                end
+            end
+        end
+    end
+    return closest
+end
+
 -- Update FOV Circle & Tracer
 RunService.RenderStepped:Connect(function()
-    if not circle then return end
-    pcall(function()
-        local guiInset = GuiService:GetGuiInset()
-        circle.Position = Vector2.new(Mouse.X, Mouse.Y + guiInset.Y)
-        circle.Radius = SilentConfig.FOVRadius
-        circle.Transparency = SilentConfig.FOVTransparency
-        circle.Visible = SilentConfig.FOVVisible and SilentActive()
+    local guiInset = GuiService:GetGuiInset()
 
-        -- Tracer
-        local target = GetClosestForSilent()
-        if SilentActive() and target and target.Character then
-            local part = target.Character:FindFirstChild(SilentConfig.targetPart)
-            if part then
-                local pos, onScreen = Camera:WorldToScreenPoint(part.Position)
+    -- Update FOV Circle
+    circle.Position = Vector2.new(Mouse.X, Mouse.Y + guiInset.Y)
+    circle.Radius = SilentConfig.FOVRadius
+    circle.Visible = SilentConfig.FOVVisible and SilentActive()
+
+    -- Update Tracer
+    local target = GetClosestForSilent()
+    if SilentActive() and target and target.Character then
+        local head = target.Character:FindFirstChild(SilentConfig.targetPart)
+        if head then
+            local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+            if onScreen then
                 local mousePos = Vector2.new(Mouse.X, Mouse.Y)
                 local diff = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
-                if onScreen and diff <= SilentConfig.FOVRadius then
+                if diff <= SilentConfig.FOVRadius then
                     tracer.From = mousePos
                     tracer.To = Vector2.new(pos.X, pos.Y)
                     tracer.Visible = true
                 else
                     tracer.Visible = false
                 end
+            else
+                tracer.Visible = false
             end
         else
             tracer.Visible = false
         end
-    end)
+    else
+        tracer.Visible = false
+    end
 end)
 
 -- Input handling
@@ -384,25 +404,7 @@ UIS.InputEnded:Connect(function(input)
     end
 end)
 
--- Find closest target for Silent Aim
-function GetClosestForSilent()
-    local closest, distance = nil, SilentConfig.FOVRadius
-    for _, v in ipairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(SilentConfig.targetPart) then
-            local pos, onScreen = Camera:WorldToScreenPoint(v.Character[SilentConfig.targetPart].Position)
-            if onScreen then
-                local diff = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
-                if diff < distance then
-                    distance = diff
-                    closest = v
-                end
-            end
-        end
-    end
-    return closest
-end
-
--- Hook Mouse Hit for Silent Aim
+-- Hook Mouse Hit for perfect head tapping
 local mt = getrawmetatable(game)
 setreadonly(mt, false)
 local oldIndex = mt.__index
@@ -411,8 +413,10 @@ mt.__index = function(self, key)
     if SilentActive() and self == Mouse and key == "Hit" then
         local target = GetClosestForSilent()
         if target and target.Character and target.Character:FindFirstChild(SilentConfig.targetPart) then
-            local part = target.Character[SilentConfig.targetPart]
-            return part.CFrame + (part.Velocity * SilentConfig.prediction)
+            local head = target.Character[SilentConfig.targetPart]
+            local vel = head.Velocity
+            local prediction = SilentConfig.prediction or 0
+            return CFrame.new(head.Position + vel * prediction)
         end
     end
     return oldIndex(self, key)
