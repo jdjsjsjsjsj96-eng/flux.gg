@@ -155,34 +155,31 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
---// ================= CAMERA AIM (1-100 smooth + X/Y prediction) =================
+--// ================= CAMERA AIM (with X/Y prediction) =================
 RunService.RenderStepped:Connect(function()
     if not CONFIG.camera_aimbot.enabled or not holding or not target then return end
 
-    local char = target.Parent
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local character = target.Parent
+    local hum = character and character:FindFirstChildOfClass("Humanoid")
+    local root = character and character:FindFirstChild("HumanoidRootPart")
 
     if hum and hum.Health > 0 and root then
-        local camCF = Camera.CFrame
+        local cf = Camera.CFrame
 
         -- predicted position
-        local predictedPos = target.Position
+        local predictedPosition = target.Position
         if CONFIG.camera_aimbot.prediction and CONFIG.camera_aimbot.prediction.enabled then
-            local vel = root.Velocity
-            predictedPos += Vector3.new(
-                vel.X * CONFIG.camera_aimbot.prediction.x,
-                vel.Y * CONFIG.camera_aimbot.prediction.y,
-                vel.Z * CONFIG.camera_aimbot.prediction.x
-            )
+            local velocity = root.Velocity
+            predictedPosition = predictedPosition
+                + Vector3.new(
+                    velocity.X * CONFIG.camera_aimbot.prediction.x, -- horizontal
+                    velocity.Y * CONFIG.camera_aimbot.prediction.y, -- vertical
+                    velocity.Z * CONFIG.camera_aimbot.prediction.x  -- horizontal/depth
+                )
         end
 
-        -- smoothness fix (1-100)
-        local smooth = math.clamp(CONFIG.camera_aimbot.smoothness, 1, 100)
-        local lerpAlpha = 0.02 + ((smooth - 1) / 99) * 0.33 -- maps 1-100 to 0.02-0.35
-
-        local aimCF = CFrame.new(camCF.Position, predictedPos)
-        Camera.CFrame = camCF:Lerp(aimCF, lerpAlpha)
+        local aimCF = CFrame.new(cf.Position, predictedPosition)
+        Camera.CFrame = cf:Lerp(aimCF, CONFIG.camera_aimbot.smoothness)
     else
         target = nil
     end
@@ -206,7 +203,7 @@ if CONFIG.name_esp.enabled then
         local text = Drawing.new("Text")
         text.Visible = false
         text.Center = true
-        text.Outline = true
+        text.Outline = true -- make it visible on all backgrounds
         text.Font = 3
         text.Size = CONFIG.name_esp.size
         text.Color = Color3.fromRGB(table.unpack(CONFIG.name_esp.color))
@@ -220,7 +217,7 @@ if CONFIG.name_esp.enabled then
             end
 
             local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-            if onScreen and headPos.Z > 0 then
+            if onScreen and headPos.Z > 0 then -- make sure it's in front of camera
                 local offset = Vector2.new(0,0)
                 if CONFIG.name_esp.position == "Above" then offset = Vector2.new(0,-27)
                 elseif CONFIG.name_esp.position == "Below" then offset = Vector2.new(0,27)
