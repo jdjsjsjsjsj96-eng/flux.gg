@@ -73,9 +73,13 @@ FOV.Visible = false
 FOV.Thickness = CONFIG.fov_circle.thickness
 FOV.Filled = CONFIG.fov_circle.filled
 FOV.Transparency = CONFIG.fov_circle.transparency
-FOV.Color = Color3.fromRGB(table.unpack(CONFIG.fov_circle.color))
+FOV.Color = Color3.fromRGB(
+    CONFIG.fov_circle.color[1],
+    CONFIG.fov_circle.color[2],
+    CONFIG.fov_circle.color[3]
+)
 
---// ================= INPUT =================
+--// ================= INPUT HANDLING =================
 UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
 
@@ -109,34 +113,51 @@ UIS.InputBegan:Connect(function(input, gpe)
 end)
 
 UIS.InputEnded:Connect(function(input)
-    -- Camera Aimbot
     if input.KeyCode == aimbotKey and CONFIG.camera_aimbot.mode == "Hold" then
         camHolding = false
         target = nil
     end
 
-    -- WalkSpeed
     if input.KeyCode == wsKey and WS.Activation.Mode == "Hold" then
         wsEnabled = false
     end
 
-    -- Jump
     if input.KeyCode == jumpKey and JS.Activation.Mode == "Hold" then
         jumpEnabled = false
     end
 end)
 
---// ================= HELPER FUNCTIONS =================
-local bodyParts = {
-    "Head",
-    "HumanoidRootPart",
-    "Left Arm",
-    "Right Arm",
-    "Left Leg",
-    "Right Leg"
-}
+--// ================= UTILITY FUNCTIONS =================
+local function GetClosestPart(character)
+    local hitPartName = CONFIG.targeting.hitpart
+    local mode = CONFIG.targeting.mode
+    local parts = CONFIG.camera_aimbot.parts
 
--- Finds closest part based on config mode
+    if not character then return nil end
+
+    if mode == "Closest" then
+        local closest, shortest = nil, math.huge
+        local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+        for _, partName in ipairs(parts) do
+            local part = character:FindFirstChild(partName)
+            if part then
+                local pos, onScreen = Camera:WorldToScreenPoint(part.Position)
+                if onScreen then
+                    local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                    if dist < shortest then
+                        shortest = dist
+                        closest = part
+                    end
+                end
+            end
+        end
+        return closest
+    else
+        return character:FindFirstChild(hitPartName)
+    end
+end
+
 local function GetClosestTarget()
     local closest, shortest = nil, math.huge
     local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
@@ -144,26 +165,14 @@ local function GetClosestTarget()
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character then
             local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                local partsToCheck = {}
-                if CONFIG.targeting.mode == "Closest" then
-                    for _, name in ipairs(bodyParts) do
-                        local p = plr.Character:FindFirstChild(name)
-                        if p then table.insert(partsToCheck, p) end
-                    end
-                else
-                    local p = plr.Character:FindFirstChild(CONFIG.targeting.hitpart)
-                    if p then table.insert(partsToCheck, p) end
-                end
-
-                for _, part in ipairs(partsToCheck) do
-                    local pos, onScreen = Camera:WorldToScreenPoint(part.Position)
-                    if onScreen then
-                        local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
-                        if dist <= CONFIG.fov_circle.size and dist < shortest then
-                            shortest = dist
-                            closest = part
-                        end
+            local part = GetClosestPart(plr.Character)
+            if hum and hum.Health > 0 and part then
+                local pos, onscreen = Camera:WorldToScreenPoint(part.Position)
+                if onscreen then
+                    local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                    if dist <= CONFIG.fov_circle.size and dist < shortest then
+                        shortest = dist
+                        closest = part
                     end
                 end
             end
@@ -174,7 +183,7 @@ end
 
 --// ================= MAIN LOOP =================
 RunService.RenderStepped:Connect(function()
-    -- Camera Aimbot FOV
+    -- Camera FOV
     if CONFIG.fov_circle.enabled and CONFIG.fov_circle.visibility == "Show" then
         FOV.Visible = true
         FOV.Radius = CONFIG.fov_circle.size
@@ -183,7 +192,7 @@ RunService.RenderStepped:Connect(function()
         FOV.Visible = false
     end
 
-    -- Sticky Aimbot
+    -- Sticky Camera Aimbot
     if CONFIG.camera_aimbot.enabled and camHolding then
         if not target or not CONFIG.camera_aimbot.sticky then
             target = GetClosestTarget()
@@ -207,7 +216,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
---// ================= CAMERA AIM =================
+--// ================= CAMERA AIM WITH PREDICTION =================
 RunService.RenderStepped:Connect(function()
     if not CONFIG.camera_aimbot.enabled or not camHolding or not target then return end
     local character = target.Parent
@@ -244,77 +253,13 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     target = nil
 end)
 
---// ================= NAME ESP =================
-local c = Workspace.CurrentCamera
-local ps = Players
-local lp = LocalPlayer
-local rs = RunService
-
-local function esp(player, character)
-    if not CONFIG.name_esp.enabled then return end
-    local humanoid = character:WaitForChild("Humanoid")
-    local hrp = character:WaitForChild("HumanoidRootPart")
-
-    local text = Drawing.new("Text")
-    text.Visible = false
-    text.Center = true
-    text.Outline = true
-    text.Font = 2
-    text.Color = Color3.fromRGB(table.unpack(CONFIG.name_esp.color))
-    text.Size = CONFIG.name_esp.size or 16
-
-    local c1, c2, c3
-    local function destroy()
-        text.Visible = false
-        text:Remove()
-        if c1 then c1:Disconnect() c1 = nil end
-        if c2 then c2:Disconnect() c2 = nil end
-        if c3 then c3:Disconnect() c3 = nil end
-    end
-
-    c2 = character.AncestryChanged:Connect(function(_, parent)
-        if not parent then destroy() end
-    end)
-
-    c3 = humanoid.HealthChanged:Connect(function(hp)
-        if hp <= 0 then destroy() end
-    end)
-
-    c1 = rs.RenderStepped:Connect(function()
-        if not CONFIG.name_esp.enabled then
-            destroy()
-            return
-        end
-        local pos, onScreen = c:WorldToViewportPoint(hrp.Position)
-        if onScreen then
-            text.Position = Vector2.new(pos.X, pos.Y - 15)
-            text.Text = player.Name
-            text.Size = CONFIG.name_esp.size
-            text.Visible = true
-        else
-            text.Visible = false
-        end
-    end)
-end
-
-local function onPlayerAdded(player)
-    if player == lp then return end
-    if player.Character then esp(player, player.Character) end
-    player.CharacterAdded:Connect(function(char)
-        esp(player, char)
-    end)
-end
-
-for _, p in ipairs(ps:GetPlayers()) do onPlayerAdded(p) end
-ps.PlayerAdded:Connect(onPlayerAdded)
-
 --// ================= SILENT AIM =================
 local SilentConfig = CONFIG.silent_aim
 local silentEnabled = SilentConfig.mode == "Always"
 local silentHolding = false
 local silentKey = Enum.KeyCode[SilentConfig.toggleKey] or Enum.KeyCode.Unknown
 
--- Create FOV Circle
+-- FOV Circle for Silent Aim
 local circle = Drawing.new("Circle")
 circle.Color = Color3.fromRGB(table.unpack(CONFIG.fov_circle.color))
 circle.Thickness = CONFIG.fov_circle.thickness
@@ -323,13 +268,14 @@ circle.Transparency = SilentConfig.FOVTransparency
 circle.Radius = SilentConfig.FOVRadius
 circle.Visible = SilentConfig.FOVVisible and silentEnabled
 
--- Create Tracer (HumanoidRootPart)
+-- Tracer
 local tracer = Drawing.new("Line")
 tracer.Visible = false
 tracer.Thickness = 1
 tracer.Color = Color3.fromRGB(255, 255, 255)
 tracer.Transparency = 1
 
+-- Silent Aim Active Check
 local function SilentActive()
     if not SilentConfig.enabled then return false end
     if SilentConfig.mode == "Always" then return true end
@@ -338,18 +284,51 @@ local function SilentActive()
     return false
 end
 
--- Closest target for Silent Aim
+-- Get Closest Part for Silent Aim
+local function GetClosestPartSilent(character)
+    local targetPart = SilentConfig.targetPart
+    local mode = CONFIG.targeting.mode
+    local parts = SilentConfig.parts
+
+    if not character then return nil end
+
+    if mode == "Closest" then
+        local closest, shortest = nil, math.huge
+        local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+
+        for _, partName in ipairs(parts) do
+            local part = character:FindFirstChild(partName)
+            if part then
+                local pos, onScreen = Camera:WorldToScreenPoint(part.Position)
+                if onScreen then
+                    local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                    if dist < shortest then
+                        shortest = dist
+                        closest = part
+                    end
+                end
+            end
+        end
+        return closest
+    else
+        return character:FindFirstChild(targetPart)
+    end
+end
+
+-- Get Closest Target for Silent Aim
 local function GetClosestForSilent()
     local closest, distance = nil, SilentConfig.FOVRadius
     for _, v in ipairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = v.Character.HumanoidRootPart
-            local pos, onScreen = Camera:WorldToScreenPoint(hrp.Position)
-            if onScreen then
-                local diff = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
-                if diff < distance then
-                    distance = diff
-                    closest = v
+        if v ~= LocalPlayer and v.Character then
+            local part = GetClosestPartSilent(v.Character)
+            if part then
+                local pos, onScreen = Camera:WorldToScreenPoint(part.Position)
+                if onScreen then
+                    local diff = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                    if diff < distance then
+                        distance = diff
+                        closest = v
+                    end
                 end
             end
         end
@@ -357,21 +336,18 @@ local function GetClosestForSilent()
     return closest
 end
 
--- Update FOV & Tracer
+-- Update Silent Aim FOV & Tracer
 RunService.RenderStepped:Connect(function()
     local guiInset = GuiService:GetGuiInset()
-
-    -- FOV Circle
     circle.Position = Vector2.new(Mouse.X, Mouse.Y + guiInset.Y)
     circle.Radius = SilentConfig.FOVRadius
     circle.Visible = SilentConfig.FOVVisible and SilentActive()
 
-    -- Tracer
-    local target = GetClosestForSilent()
-    if SilentActive() and target and target.Character then
-        local hrp = target.Character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+    local targetPlayer = GetClosestForSilent()
+    if SilentActive() and targetPlayer and targetPlayer.Character then
+        local part = GetClosestPartSilent(targetPlayer.Character)
+        if part then
+            local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
             if onScreen then
                 local mousePos = Vector2.new(Mouse.X, Mouse.Y)
                 local diff = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
@@ -393,7 +369,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Silent Aim input
+-- Silent Aim Input
 UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     if input.KeyCode == silentKey then
@@ -411,19 +387,21 @@ UIS.InputEnded:Connect(function(input)
     end
 end)
 
--- Hook Mouse Hit for perfect tapping
+-- Hook Mouse Hit for Silent Aim
 local mt = getrawmetatable(game)
 setreadonly(mt, false)
 local oldIndex = mt.__index
 
 mt.__index = function(self, key)
     if SilentActive() and self == Mouse and key == "Hit" then
-        local target = GetClosestForSilent()
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = target.Character.HumanoidRootPart
-            local vel = hrp.Velocity
-            local prediction = SilentConfig.prediction or 0
-            return CFrame.new(hrp.Position + vel * prediction)
+        local targetPlayer = GetClosestForSilent()
+        if targetPlayer and targetPlayer.Character then
+            local part = GetClosestPartSilent(targetPlayer.Character)
+            if part then
+                local vel = part.Velocity
+                local pred = SilentConfig.prediction or 0
+                return CFrame.new(part.Position + vel * pred)
+            end
         end
     end
     return oldIndex(self, key)
