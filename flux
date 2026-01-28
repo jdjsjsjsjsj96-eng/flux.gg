@@ -269,13 +269,15 @@ end
 for _, p in ipairs(ps:GetPlayers()) do onPlayerAdded(p) end
 ps.PlayerAdded:Connect(onPlayerAdded)
 
---// ================= SILENT AIM =================
+--// ================= SILENT AIM WITH TARGET MODE =================
 local SilentConfig = CONFIG.silent_aim
 local silentEnabled = SilentConfig.mode == "Always"
 local silentHolding = false
-local silentKey = Enum.KeyCode[SilentConfig.toggleKey] or Enum.KeyCode.Unknown
+local silentKey = Enum.KeyCode[SilentConfig.toggleKey]
+local targetModeKey = Enum.KeyCode[SilentConfig.targetKey]
+local lockedTarget = nil
 
--- Create FOV Circle (matches aimbot style)
+-- Create FOV Circle
 local circle
 pcall(function()
     circle = Drawing.new("Circle")
@@ -287,6 +289,7 @@ pcall(function()
     circle.Visible = SilentConfig.FOVVisible and silentEnabled
 end)
 
+-- Check if Silent Aim is active
 local function SilentActive()
     if not SilentConfig.enabled then return false end
     if SilentConfig.mode == "Always" then return true end
@@ -299,7 +302,7 @@ end
 RunService.RenderStepped:Connect(function()
     if not circle then return end
     pcall(function()
-        local guiInset = game:GetService("GuiService"):GetGuiInset()
+        local guiInset = GuiService:GetGuiInset()
         circle.Position = Vector2.new(Mouse.X, Mouse.Y + guiInset.Y)
         circle.Radius = SilentConfig.FOVRadius
         circle.Transparency = SilentConfig.FOVTransparency
@@ -307,9 +310,11 @@ RunService.RenderStepped:Connect(function()
     end)
 end)
 
--- Input handling
+-- Input Handling
 UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
+
+    -- Toggle / Hold Silent Aim
     if input.KeyCode == silentKey then
         if SilentConfig.mode == "Toggle" then
             silentEnabled = not silentEnabled
@@ -317,40 +322,67 @@ UIS.InputBegan:Connect(function(input, gpe)
             silentHolding = true
         end
     end
+
+    -- Target Mode Lock
+    if SilentConfig.aimMode == "Target" and input.KeyCode == targetModeKey then
+        local closest = nil
+        local minDist = SilentConfig.FOVRadius
+        for _, v in ipairs(Players:GetPlayers()) do
+            if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(SilentConfig.targetPart) then
+                local pos, onScreen = Camera:WorldToScreenPoint(v.Character[SilentConfig.targetPart].Position)
+                if onScreen then
+                    local dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                    if dist < minDist then
+                        minDist = dist
+                        closest = v
+                    end
+                end
+            end
+        end
+        lockedTarget = closest
+    end
 end)
 
 UIS.InputEnded:Connect(function(input)
     if input.KeyCode == silentKey and SilentConfig.mode == "Hold" then
         silentHolding = false
     end
+
+    if input.KeyCode == targetModeKey then
+        lockedTarget = nil
+    end
 end)
 
--- Find closest target for Silent Aim
-local function GetClosestForSilent()
-    local closest, distance = nil, SilentConfig.FOVRadius
-    for _, v in ipairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(SilentConfig.targetPart) then
-            local pos, onScreen = Camera:WorldToScreenPoint(v.Character[SilentConfig.targetPart].Position)
-            if onScreen then
-                local diff = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
-                if diff < distance then
-                    distance = diff
-                    closest = v
+-- Select target for Silent Aim
+local function GetSilentTarget()
+    if SilentConfig.aimMode == "Target" and lockedTarget then
+        return lockedTarget
+    else
+        local closest, minDist = nil, SilentConfig.FOVRadius
+        for _, v in ipairs(Players:GetPlayers()) do
+            if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(SilentConfig.targetPart) then
+                local pos, onScreen = Camera:WorldToScreenPoint(v.Character[SilentConfig.targetPart].Position)
+                if onScreen then
+                    local dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                    if dist < minDist then
+                        minDist = dist
+                        closest = v
+                    end
                 end
             end
         end
+        return closest
     end
-    return closest
 end
 
--- Hook Mouse Hit for Silent Aim
+-- Hook Mouse Hit
 local mt = getrawmetatable(game)
 setreadonly(mt, false)
 local oldIndex = mt.__index
 
 mt.__index = function(self, key)
     if SilentActive() and self == Mouse and key == "Hit" then
-        local target = GetClosestForSilent()
+        local target = GetSilentTarget()
         if target and target.Character and target.Character:FindFirstChild(SilentConfig.targetPart) then
             local part = target.Character[SilentConfig.targetPart]
             return part.CFrame + (part.Velocity * SilentConfig.prediction)
@@ -358,4 +390,5 @@ mt.__index = function(self, key)
     end
     return oldIndex(self, key)
 end
+
 setreadonly(mt, true)
