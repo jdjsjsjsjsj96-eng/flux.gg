@@ -381,26 +381,19 @@ local function GetClosestForSilent()
     return closest
 end
 
--- Update FOV & Tracer (fixed to mouse center)
-RunService.RenderStepped:Connect(function()
-    local guiInset = GuiService:GetGuiInset()
-
-    -- FOV circle
-    circle.Position = Vector2.new(Mouse.X, Mouse.Y) -- middle of mouse
-    circle.Radius = SilentConfig.FOV.radius
-    circle.Visible = SilentConfig.FOV.visible and SilentActive()
-
-    -- Tracer
-    local target = GetClosestForSilent()
-    if SilentActive() and target and (not CONFIG.visibility.tracer or IsVisible(target, target.Parent)) then
-        local pos, onScreen = Camera:WorldToViewportPoint(target.Position)
+-- Tracer (mouse -> HumanoidRootPart)
+local target = GetClosestForSilent()
+if SilentActive() and target and target.Parent then
+    local hrp = target.Parent:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local hrpPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
         if onScreen then
-            -- Correct the "From" position to the exact middle of mouse
             local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-            local diff = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+            local diff = (Vector2.new(hrpPos.X, hrpPos.Y) - mousePos).Magnitude
+
             if diff <= SilentConfig.FOV.radius then
                 tracer.From = mousePos
-                tracer.To = Vector2.new(pos.X, pos.Y)
+                tracer.To = Vector2.new(hrpPos.X, hrpPos.Y)
                 tracer.Visible = true
             else
                 tracer.Visible = false
@@ -411,7 +404,10 @@ RunService.RenderStepped:Connect(function()
     else
         tracer.Visible = false
     end
-end)
+else
+    tracer.Visible = false
+end
+
 
 -- Input handling
 UIS.InputBegan:Connect(function(input, gpe)
