@@ -184,7 +184,6 @@ if CONFIG.name_esp.enabled then
         local hum = character:WaitForChild("Humanoid")
         local head = character:WaitForChild("Head")
 
-        -- Main text
         local mainText = Drawing.new("Text")
         mainText.Visible = false
         mainText.Center = true
@@ -192,10 +191,16 @@ if CONFIG.name_esp.enabled then
         mainText.Size = CONFIG.name_esp.size
         mainText.Color = Color3.fromRGB(unpack(CONFIG.name_esp.color))
 
-        -- Outline texts (simulate bold outline)
-        local offsets = {Vector2.new(-1,0), Vector2.new(1,0), Vector2.new(0,-1), Vector2.new(0,1)}
+        -- Create outline copies in 8 directions (edges)
+        local outlineOffsets = {
+            Vector2.new(-1,0), Vector2.new(1,0),
+            Vector2.new(0,-1), Vector2.new(0,1),
+            Vector2.new(-1,-1), Vector2.new(-1,1),
+            Vector2.new(1,-1), Vector2.new(1,1)
+        }
+
         local outlines = {}
-        for i = 1, #offsets do
+        for i = 1, #outlineOffsets do
             local t = Drawing.new("Text")
             t.Visible = false
             t.Center = true
@@ -227,7 +232,7 @@ if CONFIG.name_esp.enabled then
 
                 -- Update outline positions
                 for i, t in ipairs(outlines) do
-                    t.Position = finalPos + offsets[i]
+                    t.Position = finalPos + outlineOffsets[i]
                     t.Text = "[ "..player.Name.." ]"
                     t.Visible = true
                 end
