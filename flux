@@ -187,7 +187,8 @@ if CONFIG.name_esp.enabled then
         local text = Drawing.new("Text")
         text.Visible = false
         text.Center = true
-        text.Outline = false
+        text.Outline = CONFIG.name_esp.outline -- Enable/disable outline
+        text.OutlineColor = Color3.fromRGB(unpack(CONFIG.name_esp.outline_color)) -- Outline color
         text.Font = 3
         text.Size = CONFIG.name_esp.size
         text.Color = Color3.fromRGB(unpack(CONFIG.name_esp.color))
@@ -230,3 +231,4 @@ if CONFIG.name_esp.enabled then
     end
     Players.PlayerAdded:Connect(onPlayerAdded)
 end
+
