@@ -414,18 +414,24 @@ local function esp(player, character)
 
     local c1, c2, c3
 
-    local function destroy()
-        text.Visible = false
-if text then
-    text.Visible = false
-    text:Remove() -- or :Destroy() depending on exploit
-    text = nil
+local function destroy()
+    if text then
+        pcall(function()
+            text.Visible = false
+            if text.Remove then
+                text:Remove()
+            elseif text.Destroy then
+                text:Destroy()
+            end
+        end)
+        text = nil
+    end
+
+    if c1 then c1:Disconnect() c1 = nil end
+    if c2 then c2:Disconnect() c2 = nil end
+    if c3 then c3:Disconnect() c3 = nil end
 end
 
-        if c1 then c1:Disconnect() c1 = nil end
-        if c2 then c2:Disconnect() c2 = nil end
-        if c3 then c3:Disconnect() c3 = nil end
-    end
 
     -- Character removed
     c2 = character.AncestryChanged:Connect(function(_, parent)
