@@ -1,3 +1,37 @@
+
+--// ================= KEY SYSTEM =================
+local pastebin_url = "https://pastebin.com/raw/YOUR_PASTEBIN_ID"
+
+if not script_key then
+    warn("[KeySystem] No key provided.")
+    return
+end
+
+local success, keys_raw = pcall(function()
+    return game:HttpGet(pastebin_url)
+end)
+
+if not success or not keys_raw then
+    warn("[KeySystem] Failed to fetch key list.")
+    return
+end
+
+local valid = false
+for key in keys_raw:gmatch("[^\r\n]+") do
+    if key == script_key then
+        valid = true
+        break
+    end
+end
+
+if not valid then
+    warn("[KeySystem] Invalid key. Script stopped.")
+    return
+end
+
+print("[KeySystem] Key accepted.")
+
+
 --// ================= SERVICES =================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
