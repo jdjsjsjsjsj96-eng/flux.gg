@@ -128,6 +128,30 @@ UIS.InputEnded:Connect(function(input)
 end)
 
 --// ================= UTILITY FUNCTIONS =================
+
+-- Visibility check
+local function IsVisible(part, character)
+    if not part or not character then return false end
+    if not CONFIG.visibility or not CONFIG.visibility.enabled then
+        return true -- visibility disabled in config
+    end
+
+    local origin = Camera.CFrame.Position
+    local direction = part.Position - origin
+
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+    rayParams.FilterDescendantsInstances = {
+        LocalPlayer.Character,
+        character
+    }
+    rayParams.IgnoreWater = true
+
+    local result = Workspace:Raycast(origin, direction, rayParams)
+    return result == nil
+end
+
+-- Get the closest part on a character (for camera aimbot)
 local function GetClosestPart(character)
     local hitPartName = CONFIG.targeting.hitpart
     local mode = CONFIG.targeting.mode
@@ -143,7 +167,7 @@ local function GetClosestPart(character)
             local part = character:FindFirstChild(partName)
             if part then
                 local pos, onScreen = Camera:WorldToScreenPoint(part.Position)
-                if onScreen then
+                if onScreen and (not CONFIG.visibility.camera_aimbot or IsVisible(part, character)) then
                     local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
                     if dist < shortest then
                         shortest = dist
@@ -154,10 +178,15 @@ local function GetClosestPart(character)
         end
         return closest
     else
-        return character:FindFirstChild(hitPartName)
+        local part = character:FindFirstChild(hitPartName)
+        if part and (not CONFIG.visibility.camera_aimbot or IsVisible(part, character)) then
+            return part
+        end
+        return nil
     end
 end
 
+-- Get closest target for camera aimbot
 local function GetClosestTarget()
     local closest, shortest = nil, math.huge
     local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
@@ -167,8 +196,8 @@ local function GetClosestTarget()
             local hum = plr.Character:FindFirstChildOfClass("Humanoid")
             local part = GetClosestPart(plr.Character)
             if hum and hum.Health > 0 and part then
-                local pos, onscreen = Camera:WorldToScreenPoint(part.Position)
-                if onscreen then
+                local pos, onScreen = Camera:WorldToScreenPoint(part.Position)
+                if onScreen and (not CONFIG.visibility.camera_aimbot or IsVisible(part, plr.Character)) then
                     local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
                     if dist <= CONFIG.fov_circle.size and dist < shortest then
                         shortest = dist
@@ -180,6 +209,7 @@ local function GetClosestTarget()
     end
     return closest
 end
+
 
 --// ================= MAIN LOOP =================
 RunService.RenderStepped:Connect(function()
@@ -284,6 +314,28 @@ local function SilentActive()
     return false
 end
 
+-- Visibility function for Silent Aim
+local function IsVisible(part, character)
+    if not part or not character then return false end
+    if not CONFIG.visibility or not CONFIG.visibility.enabled then
+        return true -- visibility disabled in config
+    end
+
+    local origin = Camera.CFrame.Position
+    local direction = part.Position - origin
+
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+    rayParams.FilterDescendantsInstances = {
+        LocalPlayer.Character,
+        character
+    }
+    rayParams.IgnoreWater = true
+
+    local result = Workspace:Raycast(origin, direction, rayParams)
+    return result == nil
+end
+
 -- Get target for silent aim based on selected part
 local function GetClosestForSilent()
     local closest, distance = nil, SilentConfig.FOV.radius
@@ -298,7 +350,7 @@ local function GetClosestForSilent()
                     if partName ~= "Closest" and plr.Character:FindFirstChild(partName) then
                         local part = plr.Character[partName]
                         local pos, onScreen = Camera:WorldToScreenPoint(part.Position)
-                        if onScreen then
+                        if onScreen and (not CONFIG.visibility.silent_aim or IsVisible(part, plr.Character)) then
                             local diff = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
                             if diff < shortest then
                                 shortest = diff
@@ -308,12 +360,15 @@ local function GetClosestForSilent()
                     end
                 end
             else
-                targetPart = plr.Character:FindFirstChild(SilentConfig.selectedPart)
+                local part = plr.Character:FindFirstChild(SilentConfig.selectedPart)
+                if part and (not CONFIG.visibility.silent_aim or IsVisible(part, plr.Character)) then
+                    targetPart = part
+                end
             end
 
             if targetPart then
                 local pos, onScreen = Camera:WorldToScreenPoint(targetPart.Position)
-                if onScreen then
+                if onScreen and (not CONFIG.visibility.silent_aim or IsVisible(targetPart, plr.Character)) then
                     local diff = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
                     if diff < distance then
                         distance = diff
@@ -337,7 +392,7 @@ RunService.RenderStepped:Connect(function()
 
     -- Tracer
     local target = GetClosestForSilent()
-    if SilentActive() and target then
+    if SilentActive() and target and (not CONFIG.visibility.tracer or IsVisible(target, target.Parent)) then
         local pos, onScreen = Camera:WorldToViewportPoint(target.Position)
         if onScreen then
             local mousePos = Vector2.new(Mouse.X, Mouse.Y)
@@ -383,7 +438,7 @@ local oldIndex = mt.__index
 mt.__index = function(self, key)
     if SilentActive() and self == Mouse and key == "Hit" then
         local target = GetClosestForSilent()
-        if target then
+        if target and (not CONFIG.visibility.silent_aim or IsVisible(target, target.Parent)) then
             local vel = target.Velocity
             local pred = SilentConfig.prediction or 0
             return CFrame.new(target.Position + vel * pred)
