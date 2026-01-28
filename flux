@@ -123,10 +123,7 @@ RunService.RenderStepped:Connect(function()
     if CONFIG.fov_circle.enabled and CONFIG.fov_circle.visibility == "Show" then
         FOV.Visible = true
         FOV.Radius = CONFIG.fov_circle.size
-        FOV.Position = Vector2.new(
-            Camera.ViewportSize.X / 2,
-            Camera.ViewportSize.Y / 2
-        )
+        FOV.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     else
         FOV.Visible = false
     end
@@ -146,17 +143,13 @@ RunService.RenderStepped:Connect(function()
     if hum then
         -- WalkSpeed
         if WS.WalkSpeed.Enabled then
-            if WS.Activation.Mode == "Always" then
-                wsEnabled = true
-            end
+            if WS.Activation.Mode == "Always" then wsEnabled = true end
             hum.WalkSpeed = wsEnabled and WS.WalkSpeed.Speed or defaultSpeed
         end
 
         -- JumpPower
         if JS.Jump.Enabled then
-            if JS.Activation.Mode == "Always" then
-                jumpEnabled = true
-            end
+            if JS.Activation.Mode == "Always" then jumpEnabled = true end
             hum.JumpPower = jumpEnabled and JS.Jump.Power or defaultJump
         end
     end
@@ -170,7 +163,7 @@ RunService.RenderStepped:Connect(function()
     if hum and hum.Health > 0 then
         local cf = Camera.CFrame
         local aimCF = CFrame.new(cf.Position, target.Position)
-        Camera.CFrame = cf:Lerp(aimCF, 1)
+        Camera.CFrame = cf:Lerp(aimCF, CONFIG.camera_aimbot.smoothness)
     else
         target = nil
     end
@@ -184,3 +177,56 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     holding = false
     target = nil
 end)
+
+--// ================= NAME ESP =================
+if CONFIG.name_esp.enabled then
+    local function createESP(player, character)
+        local hum = character:WaitForChild("Humanoid")
+        local head = character:WaitForChild("Head")
+
+        local text = Drawing.new("Text")
+        text.Visible = false
+        text.Center = true
+        text.Outline = false
+        text.Font = 3
+        text.Size = CONFIG.name_esp.size
+        text.Color = Color3.fromRGB(unpack(CONFIG.name_esp.color))
+
+        local conn
+        conn = RunService.RenderStepped:Connect(function()
+            if hum.Health <= 0 or not character.Parent then
+                text:Remove()
+                conn:Disconnect()
+                return
+            end
+
+            local headPos, onscreen = Camera:WorldToViewportPoint(head.Position)
+            if onscreen then
+                local offset = Vector2.new(0,0)
+                if CONFIG.name_esp.position == "Above" then offset = Vector2.new(0,-27)
+                elseif CONFIG.name_esp.position == "Below" then offset = Vector2.new(0,27)
+                elseif CONFIG.name_esp.position == "Left" then offset = Vector2.new(-50,0)
+                elseif CONFIG.name_esp.position == "Right" then offset = Vector2.new(50,0)
+                end
+
+                text.Position = Vector2.new(headPos.X, headPos.Y) + offset
+                text.Text = "[ "..player.Name.." ]"
+                text.Visible = true
+            else
+                text.Visible = false
+            end
+        end)
+    end
+
+    local function onPlayerAdded(player)
+        if player ~= LocalPlayer then
+            if player.Character then createESP(player, player.Character) end
+            player.CharacterAdded:Connect(function(char) createESP(player, char) end)
+        end
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        onPlayerAdded(player)
+    end
+    Players.PlayerAdded:Connect(onPlayerAdded)
+end
