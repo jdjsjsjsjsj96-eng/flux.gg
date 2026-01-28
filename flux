@@ -199,7 +199,7 @@ if CONFIG.name_esp.enabled then
     local ESPs = {} -- store ESPs per player
 
     local function createESP(player)
-        if ESPs[player] then return end -- already exists
+        if ESPs[player] then return end
         local character = player.Character
         if not character then return end
 
@@ -207,8 +207,9 @@ if CONFIG.name_esp.enabled then
         local head = character:FindFirstChild("Head")
         if not hum or not head then return end
 
+        -- Create the Drawing text once
         local text = Drawing.new("Text")
-        text.Visible = false
+        text.Visible = true
         text.Center = true
         text.Outline = true
         text.Font = 3
@@ -217,21 +218,21 @@ if CONFIG.name_esp.enabled then
 
         ESPs[player] = {Text = text, Humanoid = hum, Head = head}
 
-        -- clean up when character dies
+        -- Clean up when player dies
         hum.Died:Connect(function()
-            if text then text:Remove() end
+            text:Remove()
             ESPs[player] = nil
         end)
     end
 
     local function removeESP(player)
         if ESPs[player] then
-            if ESPs[player].Text then ESPs[player].Text:Remove() end
+            ESPs[player].Text:Remove()
             ESPs[player] = nil
         end
     end
 
-    -- create ESP for existing players
+    -- Handle existing players
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
             createESP(player)
@@ -241,7 +242,7 @@ if CONFIG.name_esp.enabled then
         end
     end
 
-    -- auto-create/remove ESP when players join/leave
+    -- Handle new players
     Players.PlayerAdded:Connect(function(player)
         if player ~= LocalPlayer then
             createESP(player)
@@ -250,36 +251,36 @@ if CONFIG.name_esp.enabled then
             end)
         end
     end)
+
+    -- Handle leaving players
     Players.PlayerRemoving:Connect(removeESP)
 
-    -- update ESPs every 0.5 seconds
-    spawn(function()
-        while true do
-            for player, esp in pairs(ESPs) do
-                local hum = esp.Humanoid
-                local head = esp.Head
-                local text = esp.Text
+    -- Update all ESPs smoothly every frame
+    RunService.RenderStepped:Connect(function()
+        for player, esp in pairs(ESPs) do
+            local hum = esp.Humanoid
+            local head = esp.Head
+            local text = esp.Text
 
-                if hum and hum.Health > 0 and head and head.Parent then
-                    local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-                    if onScreen and headPos.Z > 0 then
-                        local offset = Vector2.new(0,0)
-                        if CONFIG.name_esp.position == "Above" then offset = Vector2.new(0,-27)
-                        elseif CONFIG.name_esp.position == "Below" then offset = Vector2.new(0,27)
-                        elseif CONFIG.name_esp.position == "Left" then offset = Vector2.new(-50,0)
-                        elseif CONFIG.name_esp.position == "Right" then offset = Vector2.new(50,0)
-                        end
-                        text.Position = Vector2.new(headPos.X, headPos.Y) + offset
-                        text.Text = "[ "..player.Name.." ]"
-                        text.Visible = true
-                    else
-                        text.Visible = false
+            if hum and hum.Health > 0 and head and head.Parent then
+                local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                if onScreen and headPos.Z > 0 then
+                    local offset = Vector2.new(0,0)
+                    if CONFIG.name_esp.position == "Above" then offset = Vector2.new(0,-27)
+                    elseif CONFIG.name_esp.position == "Below" then offset = Vector2.new(0,27)
+                    elseif CONFIG.name_esp.position == "Left" then offset = Vector2.new(-50,0)
+                    elseif CONFIG.name_esp.position == "Right" then offset = Vector2.new(50,0)
                     end
+
+                    text.Position = Vector2.new(headPos.X, headPos.Y) + offset
+                    text.Text = "[ "..player.Name.." ]"
+                    text.Visible = true
                 else
                     text.Visible = false
                 end
+            else
+                text.Visible = false
             end
-            task.wait(0.5) -- refresh every 0.5s
         end
     end)
 end
