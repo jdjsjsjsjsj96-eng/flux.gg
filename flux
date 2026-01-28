@@ -196,6 +196,11 @@ LocalPlayer.CharacterAdded:Connect(function(char)
 end)
 
 
+local c = workspace.CurrentCamera
+local ps = game:GetService("Players")
+local lp = ps.LocalPlayer
+local rs = game:GetService("RunService")
+
 local function esp(player, character)
     local humanoid = character:WaitForChild("Humanoid")
     local hrp = character:WaitForChild("HumanoidRootPart")
@@ -205,7 +210,7 @@ local function esp(player, character)
     text.Center = true
     text.Outline = true
     text.Font = 2
-    text.Color = Color3.fromRGB(255,255,255)
+    text.Color = Color3.fromRGB(255, 255, 255) -- hardcoded to white
     text.Size = CONFIG.name_esp.size or 16
 
     local c1, c2, c3
@@ -226,9 +231,9 @@ local function esp(player, character)
         if hp <= 0 then destroy() end
     end)
 
-    c1 = RunService.RenderStepped:Connect(function()
+    c1 = rs.RenderStepped:Connect(function()
         if not CONFIG.name_esp.enabled then destroy() return end
-        local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+        local pos, onScreen = c:WorldToViewportPoint(hrp.Position)
         if onScreen then
             text.Position = Vector2.new(pos.X, pos.Y - 15)
             text.Text = player.Name
@@ -238,6 +243,17 @@ local function esp(player, character)
         end
     end)
 end
+
+local function onPlayerAdded(player)
+    if player == lp then return end
+    if player.Character then esp(player, player.Character) end
+    player.CharacterAdded:Connect(function(char)
+        esp(player, char)
+    end)
+end
+
+for _, p in ipairs(ps:GetPlayers()) do onPlayerAdded(p) end
+ps.PlayerAdded:Connect(onPlayerAdded)
 
 
 
