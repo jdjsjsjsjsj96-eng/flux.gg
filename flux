@@ -298,10 +298,10 @@ circle.Transparency = SilentConfig.FOV.transparency
 circle.Radius = SilentConfig.FOV.radius
 circle.Visible = SilentConfig.FOV.visible and silentEnabled
 
--- Create Tracer (straight line from mouse → HRP)
+-- Create Tracer
 local tracer = Drawing.new("Line")
 tracer.Visible = false
-tracer.Thickness = 2
+tracer.Thickness = 1
 tracer.Color = Color3.fromRGB(255, 255, 255)
 tracer.Transparency = 1
 
@@ -314,11 +314,11 @@ local function SilentActive()
     return false
 end
 
--- Visibility function
+-- Visibility function for Silent Aim
 local function IsVisible(part, character)
     if not part or not character then return false end
     if not CONFIG.visibility or not CONFIG.visibility.enabled then
-        return true
+        return true -- visibility disabled in config
     end
 
     local origin = Camera.CFrame.Position
@@ -326,23 +326,25 @@ local function IsVisible(part, character)
 
     local rayParams = RaycastParams.new()
     rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-    rayParams.FilterDescendantsInstances = {LocalPlayer.Character, character}
+    rayParams.FilterDescendantsInstances = {
+        LocalPlayer.Character,
+        character
+    }
     rayParams.IgnoreWater = true
 
     local result = Workspace:Raycast(origin, direction, rayParams)
     return result == nil
 end
 
--- Get closest target for Silent Aim
+-- Get target for silent aim based on selected part
 local function GetClosestForSilent()
     local closest, distance = nil, SilentConfig.FOV.radius
     local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character then
             local targetPart
-
             if SilentConfig.selectedPart == "Closest" then
+                -- find the closest part from parts list
                 local shortest = math.huge
                 for _, partName in ipairs(SilentConfig.parts) do
                     if partName ~= "Closest" and plr.Character:FindFirstChild(partName) then
@@ -376,27 +378,28 @@ local function GetClosestForSilent()
             end
         end
     end
-
     return closest
 end
 
 -- Update FOV & Tracer
 RunService.RenderStepped:Connect(function()
+    local guiInset = GuiService:GetGuiInset()
+
     -- FOV circle
-    circle.Position = Vector2.new(Mouse.X, Mouse.Y)
+    circle.Position = Vector2.new(Mouse.X, Mouse.Y) -- always middle of mouse
     circle.Radius = SilentConfig.FOV.radius
     circle.Visible = SilentConfig.FOV.visible and SilentActive()
 
     -- Tracer
     local target = GetClosestForSilent()
-    if SilentActive() and target and target.Parent then
-        local hrp = target.Parent:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local hrpPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-            if onScreen then
-                local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+    if SilentActive() and target and (not CONFIG.visibility.tracer or IsVisible(target, target.Parent)) then
+        local pos, onScreen = Camera:WorldToViewportPoint(target.Position)
+        if onScreen then
+            local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+            local diff = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+            if diff <= SilentConfig.FOV.radius then
                 tracer.From = mousePos
-                tracer.To = Vector2.new(hrpPos.X, hrpPos.Y)
+                tracer.To = Vector2.new(pos.X, pos.Y)
                 tracer.Visible = true
             else
                 tracer.Visible = false
