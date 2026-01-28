@@ -184,37 +184,18 @@ if CONFIG.name_esp.enabled then
         local hum = character:WaitForChild("Humanoid")
         local head = character:WaitForChild("Head")
 
-        local mainText = Drawing.new("Text")
-        mainText.Visible = false
-        mainText.Center = true
-        mainText.Font = 3
-        mainText.Size = CONFIG.name_esp.size
-        mainText.Color = Color3.fromRGB(unpack(CONFIG.name_esp.color))
-
-        -- Create outline copies in 8 directions (edges)
-        local outlineOffsets = {
-            Vector2.new(-1,0), Vector2.new(1,0),
-            Vector2.new(0,-1), Vector2.new(0,1),
-            Vector2.new(-1,-1), Vector2.new(-1,1),
-            Vector2.new(1,-1), Vector2.new(1,1)
-        }
-
-        local outlines = {}
-        for i = 1, #outlineOffsets do
-            local t = Drawing.new("Text")
-            t.Visible = false
-            t.Center = true
-            t.Font = 3
-            t.Size = CONFIG.name_esp.size
-            t.Color = Color3.fromRGB(unpack(CONFIG.name_esp.outline_color))
-            table.insert(outlines, t)
-        end
+        local text = Drawing.new("Text")
+        text.Visible = false
+        text.Center = true
+        text.Outline = false
+        text.Font = 3
+        text.Size = CONFIG.name_esp.size
+        text.Color = Color3.fromRGB(unpack(CONFIG.name_esp.color))
 
         local conn
         conn = RunService.RenderStepped:Connect(function()
             if hum.Health <= 0 or not character.Parent then
-                mainText:Remove()
-                for _, t in ipairs(outlines) do t:Remove() end
+                text:Remove()
                 conn:Disconnect()
                 return
             end
@@ -228,22 +209,11 @@ if CONFIG.name_esp.enabled then
                 elseif CONFIG.name_esp.position == "Right" then offset = Vector2.new(50,0)
                 end
 
-                local finalPos = Vector2.new(headPos.X, headPos.Y) + offset
-
-                -- Update outline positions
-                for i, t in ipairs(outlines) do
-                    t.Position = finalPos + outlineOffsets[i]
-                    t.Text = "[ "..player.Name.." ]"
-                    t.Visible = true
-                end
-
-                -- Update main text
-                mainText.Position = finalPos
-                mainText.Text = "[ "..player.Name.." ]"
-                mainText.Visible = true
+                text.Position = Vector2.new(headPos.X, headPos.Y) + offset
+                text.Text = "[ "..player.Name.." ]"
+                text.Visible = true
             else
-                mainText.Visible = false
-                for _, t in ipairs(outlines) do t.Visible = false end
+                text.Visible = false
             end
         end)
     end
