@@ -284,48 +284,57 @@ end
 --// ================= SILENT AIM =================
 local SilentConfig = CONFIG.silent_aim
 local silentEnabled = SilentConfig.mode == "Always" and true or false
+local holding = false
 local silentKey = Enum.KeyCode[SilentConfig.toggleKey]
 
--- Create FOV Circle
+-- Create FOV Circle (matches aimbot style)
 local circle
 pcall(function()
     circle = Drawing.new("Circle")
-    circle.Color = Color3.fromRGB(255, 255, 255)
-    circle.Thickness = 2
-    circle.Filled = false
+    circle.Color = Color3.fromRGB(table.unpack(CONFIG.fov_circle.color))
+    circle.Thickness = CONFIG.fov_circle.thickness
+    circle.Filled = CONFIG.fov_circle.filled
     circle.Transparency = SilentConfig.FOVTransparency
     circle.Radius = SilentConfig.FOVRadius
     circle.Visible = SilentConfig.FOVVisible and silentEnabled
 end)
 
+-- Function to check if Silent Aim is active
+local function SilentActive()
+    if not SilentConfig.enabled then return false end
+    if SilentConfig.mode == "Always" then return true end
+    if SilentConfig.mode == "Toggle" then return silentEnabled end
+    if SilentConfig.mode == "Hold" then return holding end
+    return false
+end
+
 -- Update FOV Circle
-local function updateFOVCircle()
+RunService.RenderStepped:Connect(function()
     if not circle then return end
     pcall(function()
         local guiInset = game:GetService("GuiService"):GetGuiInset()
         circle.Position = Vector2.new(Mouse.X, Mouse.Y + guiInset.Y)
         circle.Radius = SilentConfig.FOVRadius
         circle.Transparency = SilentConfig.FOVTransparency
-        circle.Visible = SilentConfig.FOVVisible and silentEnabled
+        circle.Visible = SilentConfig.FOVVisible and SilentActive()
     end)
-end
-RunService.RenderStepped:Connect(updateFOVCircle)
+end)
 
--- Silent Aim input handling
+-- Input handling
 UIS.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     if input.KeyCode == silentKey then
         if SilentConfig.mode == "Toggle" then
             silentEnabled = not silentEnabled
         elseif SilentConfig.mode == "Hold" then
-            silentEnabled = true
+            holding = true
         end
     end
 end)
 
 UIS.InputEnded:Connect(function(input)
     if input.KeyCode == silentKey and SilentConfig.mode == "Hold" then
-        silentEnabled = false
+        holding = false
     end
 end)
 
@@ -350,16 +359,17 @@ end
 -- Hook Mouse Hit for Silent Aim
 local mt = getrawmetatable(game)
 setreadonly(mt, false)
-local __index = mt.__index
+local oldIndex = mt.__index
 
 mt.__index = function(self, key)
-    if silentEnabled and self == Mouse and key == "Hit" then
+    if SilentActive() and self == Mouse and key == "Hit" then
         local target = GetClosestForSilent()
         if target and target.Character and target.Character:FindFirstChild(SilentConfig.targetPart) then
             local part = target.Character[SilentConfig.targetPart]
-            return (part.CFrame + (part.Velocity * SilentConfig.prediction))
+            return part.CFrame + (part.Velocity * SilentConfig.prediction)
         end
     end
-    return __index(self, key)
+    return oldIndex(self, key)
 end
 setreadonly(mt, true)
+
