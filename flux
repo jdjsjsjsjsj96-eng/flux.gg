@@ -155,34 +155,34 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
---// ================= CAMERA AIM (Smoothness 1-100 + X/Y prediction) =================
+--// ================= CAMERA AIM (1-100 smooth + X/Y prediction) =================
 RunService.RenderStepped:Connect(function()
     if not CONFIG.camera_aimbot.enabled or not holding or not target then return end
 
-    local character = target.Parent
-    local hum = character and character:FindFirstChildOfClass("Humanoid")
-    local root = character and character:FindFirstChild("HumanoidRootPart")
+    local char = target.Parent
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
 
     if hum and hum.Health > 0 and root then
-        local cf = Camera.CFrame
+        local camCF = Camera.CFrame
 
-        -- Prediction
-        local predictedPosition = target.Position
+        -- predicted position
+        local predictedPos = target.Position
         if CONFIG.camera_aimbot.prediction and CONFIG.camera_aimbot.prediction.enabled then
-            local velocity = root.Velocity
-            predictedPosition = predictedPosition + Vector3.new(
-                velocity.X * CONFIG.camera_aimbot.prediction.x, -- X lead
-                velocity.Y * CONFIG.camera_aimbot.prediction.y, -- Y lead
-                velocity.Z * CONFIG.camera_aimbot.prediction.x  -- Z / forward lead
+            local vel = root.Velocity
+            predictedPos += Vector3.new(
+                vel.X * CONFIG.camera_aimbot.prediction.x,
+                vel.Y * CONFIG.camera_aimbot.prediction.y,
+                vel.Z * CONFIG.camera_aimbot.prediction.x
             )
         end
 
-        -- Smoothness (1-100 → 0.01-1.0)
-        local smoothness = math.clamp(CONFIG.camera_aimbot.smoothness, 1, 100)
-        local lerpAlpha = smoothness / 100
+        -- smoothness fix (1-100)
+        local smooth = math.clamp(CONFIG.camera_aimbot.smoothness, 1, 100)
+        local lerpAlpha = 0.02 + ((smooth - 1) / 99) * 0.33 -- maps 1-100 to 0.02-0.35
 
-        local aimCF = CFrame.new(cf.Position, predictedPosition)
-        Camera.CFrame = cf:Lerp(aimCF, lerpAlpha)
+        local aimCF = CFrame.new(camCF.Position, predictedPos)
+        Camera.CFrame = camCF:Lerp(aimCF, lerpAlpha)
     else
         target = nil
     end
