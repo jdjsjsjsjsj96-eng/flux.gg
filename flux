@@ -284,3 +284,100 @@ if CONFIG.name_esp.enabled then
         end
     end)
 end
+
+--// ================= SILENT AIM =================
+local holdingSilent = false
+local SilentKey = Enum.KeyCode[getgenv().Configurations.SilentAim and getgenv().Configurations.SilentAim.toggleKey or "V"]
+
+-- Create FOV circle for Silent Aim
+local SilentFOV
+pcall(function()
+    local cfg = getgenv().Configurations.SilentAim
+    SilentFOV = Drawing.new("Circle")
+    SilentFOV.Color = Color3.fromRGB(table.unpack(cfg.fov.color))
+    SilentFOV.Thickness = cfg.fov.thickness
+    SilentFOV.Filled = cfg.fov.filled
+    SilentFOV.Transparency = cfg.fov.transparency
+    SilentFOV.Radius = cfg.fov.size
+    SilentFOV.Visible = cfg.fov.visible
+end)
+
+-- Input for Silent Aim
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    local cfg = getgenv().Configurations.SilentAim
+    if not cfg or not cfg.enabled then return end
+
+    if cfg.mode == "Toggle" and input.KeyCode == SilentKey then
+        holdingSilent = not holdingSilent
+    elseif cfg.mode == "Hold" and input.KeyCode == SilentKey then
+        holdingSilent = true
+    end
+end)
+
+UIS.InputEnded:Connect(function(input)
+    local cfg = getgenv().Configurations.SilentAim
+    if not cfg or not cfg.enabled then return end
+
+    if cfg.mode == "Hold" and input.KeyCode == SilentKey then
+        holdingSilent = false
+    end
+end)
+
+-- Update Silent Aim FOV circle
+RunService.RenderStepped:Connect(function()
+    if not SilentFOV then return end
+    local cfg = getgenv().Configurations.SilentAim
+    if not cfg then return end
+    SilentFOV.Position = Vector2.new(LocalPlayer:GetMouse().X, LocalPlayer:GetMouse().Y + game:GetService("GuiService"):GetGuiInset().Y)
+    SilentFOV.Radius = cfg.fov.size
+    SilentFOV.Transparency = cfg.fov.transparency
+    SilentFOV.Visible = cfg.fov.visible
+end)
+
+-- Get closest target for Silent Aim
+local function GetClosestSilentTarget()
+    local cfg = getgenv().Configurations.SilentAim
+    if not cfg then return nil end
+    local closest, shortest = nil, cfg.fov.size
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild(cfg.targetPart) then
+            local part = plr.Character[cfg.targetPart]
+            local pos, onScreen = Camera:WorldToScreenPoint(part.Position)
+            if onScreen then
+                local diff = (Vector2.new(pos.X, pos.Y) - Vector2.new(LocalPlayer:GetMouse().X, LocalPlayer:GetMouse().Y)).Magnitude
+                if diff < shortest then
+                    shortest = diff
+                    closest = plr
+                end
+            end
+        end
+    end
+    return closest
+end
+
+-- Hook Mouse.Hit
+local mt = getrawmetatable(game)
+setreadonly(mt, false)
+local __index = mt.__index
+
+mt.__index = function(self, key)
+    local cfg = getgenv().Configurations.SilentAim
+    local active = cfg and cfg.enabled and (cfg.mode == "Always" or holdingSilent)
+    if active and self == LocalPlayer:GetMouse() and key == "Hit" then
+        local target = GetClosestSilentTarget()
+        if target and target.Character and target.Character:FindFirstChild(cfg.targetPart) then
+            local part = target.Character[cfg.targetPart]
+            local predicted = part.Position
+            if cfg.prediction.enabled then
+                local vel = part.Velocity
+                predicted = predicted + Vector3.new(vel.X * cfg.prediction.x, vel.Y * cfg.prediction.y, vel.Z * cfg.prediction.x)
+            end
+            return CFrame.new(predicted)
+        end
+    end
+    return __index(self, key)
+end
+
+setreadonly(mt, true)
