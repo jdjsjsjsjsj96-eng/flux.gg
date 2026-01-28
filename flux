@@ -195,56 +195,58 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     camTarget = nil
 end)
 
-local function esp(player, character)
-    if not CONFIG.name_esp.enabled then return end
+--// ================= NAME ESP =================
+local ESP_CACHE = {}
 
-    local humanoid = character:WaitForChild("Humanoid")
-    local hrp = character:WaitForChild("HumanoidRootPart")
+local function destroyESP(player)
+    local esp = ESP_CACHE[player]
+    if esp then
+        if esp.text then esp.text:Remove() end
+        if esp.conn then esp.conn:Disconnect() end
+        if esp.charConn then esp.charConn:Disconnect() end
+        if esp.healthConn then esp.healthConn:Disconnect() end
+        ESP_CACHE[player] = nil
+    end
+end
+
+local function createESP(player, character)
+    if not CONFIG.name_esp.enabled then return end
+    if player == LocalPlayer then return end
+
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    local hrp = character:WaitForChild("HumanoidRootPart", 5)
+    if not humanoid or not hrp then return end
 
     local text = Drawing.new("Text")
-    text.Visible = false
     text.Center = true
     text.Outline = true
     text.Font = 2
     text.Color = Color3.fromRGB(255, 255, 255)
     text.Size = CONFIG.name_esp.size or 16
+    text.Visible = false
 
-    local c1, c2, c3
+    local esp = { text = text }
+    ESP_CACHE[player] = esp
 
-    local function destroy()
-        text.Visible = false
-        text:Remove()
-        if c1 then c1:Disconnect() end
-        if c2 then c2:Disconnect() end
-        if c3 then c3:Disconnect() end
-    end
-
-    -- Character removed
-    c2 = character.AncestryChanged:Connect(function(_, parent)
-        if not parent then
-            destroy()
-        end
+    esp.charConn = character.AncestryChanged:Connect(function(_, parent)
+        if not parent then destroyESP(player) end
     end)
 
-    -- Death cleanup
-    c3 = humanoid.HealthChanged:Connect(function(hp)
-        if hp <= 0 then
-            destroy()
-        end
+    esp.healthConn = humanoid.HealthChanged:Connect(function(hp)
+        if hp <= 0 then destroyESP(player) end
     end)
 
-    -- Render loop
-    c1 = rs.RenderStepped:Connect(function()
+    esp.conn = RunService.RenderStepped:Connect(function()
         if not CONFIG.name_esp.enabled then
-            text.Visible = false
+            destroyESP(player)
             return
         end
 
-        local pos, onScreen = c:WorldToViewportPoint(hrp.Position)
+        local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
         if onScreen then
-            text.Position = Vector2.new(pos.X, pos.Y - 15)
+            text.Position = Vector2.new(pos.X, pos.Y - 18)
             text.Text = player.Name
-            text.Size = CONFIG.name_esp.size
+            text.Size = CONFIG.name_esp.size or 16
             text.Visible = true
         else
             text.Visible = false
@@ -252,3 +254,32 @@ local function esp(player, character)
     end)
 end
 
+local function onPlayerAdded(player)
+    if player == LocalPlayer then return end
+
+    if player.Character then
+        createESP(player, player.Character)
+    end
+
+    player.CharacterAdded:Connect(function(character)
+        createESP(player, character)
+    end)
+end
+
+for _, player in ipairs(Players:GetPlayers()) do
+    onPlayerAdded(player)
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+
+--// Live toggle cleanup
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        if not CONFIG.name_esp.enabled then
+            for player in pairs(ESP_CACHE) do
+                destroyESP(player)
+            end
+        end
+    end
+end)
