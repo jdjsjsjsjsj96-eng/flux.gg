@@ -282,45 +282,59 @@ if CONFIG.name_esp.enabled then
 end
 
 --// ================= SILENT AIM =================
---[[ WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk! ]]
-getgenv().Silent = {
-    Enabled = true, 
-    Prediction = 0.18,
-    TargetPart = "HumanoidRootPart",
-    FOVRadius = 200, 
-    FOVVisible = true, 
-    FOVTransparency = 0.5 
-}
+local SilentConfig = CONFIG.silent_aim
+local silentEnabled = SilentConfig.mode == "Always" and true or false
+local silentKey = Enum.KeyCode[SilentConfig.toggleKey]
 
+-- Create FOV Circle
 local circle
 pcall(function()
     circle = Drawing.new("Circle")
     circle.Color = Color3.fromRGB(255, 255, 255)
     circle.Thickness = 2
     circle.Filled = false
-    circle.Transparency = getgenv().Silent.FOVTransparency
-    circle.Radius = getgenv().Silent.FOVRadius
-    circle.Visible = getgenv().Silent.FOVVisible
+    circle.Transparency = SilentConfig.FOVTransparency
+    circle.Radius = SilentConfig.FOVRadius
+    circle.Visible = SilentConfig.FOVVisible and silentEnabled
 end)
 
+-- Update FOV Circle
 local function updateFOVCircle()
     if not circle then return end
     pcall(function()
-        local guiInset = GuiService:GetGuiInset()
+        local guiInset = game:GetService("GuiService"):GetGuiInset()
         circle.Position = Vector2.new(Mouse.X, Mouse.Y + guiInset.Y)
-        circle.Radius = getgenv().Silent.FOVRadius
-        circle.Transparency = getgenv().Silent.FOVTransparency
-        circle.Visible = getgenv().Silent.FOVVisible
+        circle.Radius = SilentConfig.FOVRadius
+        circle.Transparency = SilentConfig.FOVTransparency
+        circle.Visible = SilentConfig.FOVVisible and silentEnabled
     end)
 end
-
 RunService.RenderStepped:Connect(updateFOVCircle)
 
+-- Silent Aim input handling
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == silentKey then
+        if SilentConfig.mode == "Toggle" then
+            silentEnabled = not silentEnabled
+        elseif SilentConfig.mode == "Hold" then
+            silentEnabled = true
+        end
+    end
+end)
+
+UIS.InputEnded:Connect(function(input)
+    if input.KeyCode == silentKey and SilentConfig.mode == "Hold" then
+        silentEnabled = false
+    end
+end)
+
+-- Find closest target for Silent Aim
 local function GetClosestForSilent()
-    local closest, distance = nil, getgenv().Silent.FOVRadius
+    local closest, distance = nil, SilentConfig.FOVRadius
     for _, v in ipairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(getgenv().Silent.TargetPart) then
-            local pos, onScreen = Camera:WorldToScreenPoint(v.Character[getgenv().Silent.TargetPart].Position)
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(SilentConfig.targetPart) then
+            local pos, onScreen = Camera:WorldToScreenPoint(v.Character[SilentConfig.targetPart].Position)
             if onScreen then
                 local diff = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
                 if diff < distance then
@@ -333,16 +347,17 @@ local function GetClosestForSilent()
     return closest
 end
 
+-- Hook Mouse Hit for Silent Aim
 local mt = getrawmetatable(game)
 setreadonly(mt, false)
 local __index = mt.__index
 
 mt.__index = function(self, key)
-    if getgenv().Silent.Enabled and self == Mouse and key == "Hit" then
+    if silentEnabled and self == Mouse and key == "Hit" then
         local target = GetClosestForSilent()
-        if target and target.Character and target.Character:FindFirstChild(getgenv().Silent.TargetPart) then
-            local part = target.Character[getgenv().Silent.TargetPart]
-            return (part.CFrame + (part.Velocity * getgenv().Silent.Prediction))
+        if target and target.Character and target.Character:FindFirstChild(SilentConfig.targetPart) then
+            local part = target.Character[SilentConfig.targetPart]
+            return (part.CFrame + (part.Velocity * SilentConfig.prediction))
         end
     end
     return __index(self, key)
