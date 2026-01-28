@@ -195,82 +195,83 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     camTarget = nil
 end)
 
---// ================= NAME ESP (LOCK INSPECTION) =================
-if CONFIG.name_esp.enabled then
-    local LOCK = CONFIG.lock_inspection -- ✅ CORRECT SOURCE
+--// ================= NAME ESP =================
+local CONFIG = getgenv().Configurations
+if not CONFIG.name_esp.enabled then return end
 
-    local function esp(player, char)
-        local hum = char:WaitForChild("Humanoid", 5)
-        local hrp = char:WaitForChild("HumanoidRootPart", 5)
-        if not hum or not hrp then return end
+local Camera = workspace.CurrentCamera
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
 
-        local text = Drawing.new("Text")
-        text.Center = true
-        text.Outline = true
-        text.Font = 2
-        text.Size = CONFIG.name_esp.size
-        text.Text = player.Name
+local function esp(player, character)
+    local humanoid = character:WaitForChild("Humanoid")
+    local hrp = character:WaitForChild("HumanoidRootPart")
+
+    local text = Drawing.new("Text")
+    text.Visible = false
+    text.Center = true
+    text.Outline = true
+    text.Font = 2
+    text.Color = Color3.fromRGB(255,255,255)
+    text.Size = CONFIG.name_esp.size
+
+    local c1, c2, c3
+
+    local function cleanup()
         text.Visible = false
+        text:Remove()
+        if c1 then c1:Disconnect() c1 = nil end
+        if c2 then c2:Disconnect() c2 = nil end
+        if c3 then c3:Disconnect() c3 = nil end
+    end
 
-        local function setColor(tbl)
-            text.Color = Color3.fromRGB(tbl[1], tbl[2], tbl[3])
+    c2 = character.AncestryChanged:Connect(function(_, parent)
+        if not parent then cleanup() end
+    end)
+
+    c3 = humanoid.HealthChanged:Connect(function(hp)
+        if hp <= 0 or humanoid:GetState() == Enum.HumanoidStateType.Dead then
+            cleanup()
         end
+    end)
 
-        local function offset()
+    c1 = RunService.RenderStepped:Connect(function()
+        local hrp_pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+        if onScreen then
+            local offset = Vector2.new(0,0)
             if CONFIG.name_esp.position == "Above" then
-                return Vector2.new(0, -27)
+                offset = Vector2.new(0, -27)
             elseif CONFIG.name_esp.position == "Below" then
-                return Vector2.new(0, 27)
+                offset = Vector2.new(0, 27)
             elseif CONFIG.name_esp.position == "Left" then
-                return Vector2.new(-50, 0)
+                offset = Vector2.new(-50, 0)
             elseif CONFIG.name_esp.position == "Right" then
-                return Vector2.new(50, 0)
-            end
-            return Vector2.zero
-        end
-
-        RunService.RenderStepped:Connect(function()
-            if not char.Parent or hum.Health <= 0 then
-                text.Visible = false
-                return
+                offset = Vector2.new(50, 0)
             end
 
-            local pos, vis = Camera:WorldToViewportPoint(hrp.Position)
-            if not vis then
-                text.Visible = false
-                return
-            end
-
-            text.Position = Vector2.new(pos.X, pos.Y) + offset()
+            text.Position = Vector2.new(hrp_pos.X, hrp_pos.Y) + offset
+            text.Text = player.Name
             text.Visible = true
-
-            -- 🔵 LOCK INSPECTION COLOR LOGIC (FIXED)
-            if LOCK
-            and LOCK.enabled
-            and _G.currentCameraTarget == hrp then
-                setColor(LOCK.locked_color)
-            else
-                setColor(LOCK.normal_color)
-            end
-        end)
-    end
-
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            if p.Character then
-                esp(p, p.Character)
-            end
-            p.CharacterAdded:Connect(function(c)
-                esp(p, c)
-            end)
-        end
-    end
-
-    Players.PlayerAdded:Connect(function(p)
-        if p ~= LocalPlayer then
-            p.CharacterAdded:Connect(function(c)
-                esp(p, c)
-            end)
+        else
+            text.Visible = false
         end
     end)
 end
+
+local function onPlayerAdded(player)
+    if player.Character then
+        esp(player, player.Character)
+    end
+    player.CharacterAdded:Connect(function(char)
+        esp(player, char)
+    end)
+end
+
+for _, player in ipairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        onPlayerAdded(player)
+    end
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
