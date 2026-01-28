@@ -203,14 +203,14 @@ local ps = game:GetService("Players")
 local lp = ps.LocalPlayer
 local rs = game:GetService("RunService")
 
-local function esp(p, cr)
+local function esp(p,cr)
     local h = cr:WaitForChild("Humanoid")
     local hrp = cr:WaitForChild("HumanoidRootPart")
 
     local text = Drawing.new("Text")
     text.Visible = false
     text.Center = true
-    text.Outline = true
+    text.Outline = true 
     text.Font = 2
     text.Color = Color3.fromRGB(
         CONFIG.name_esp.color[1],
@@ -219,52 +219,55 @@ local function esp(p, cr)
     )
     text.Size = CONFIG.name_esp.size
 
-    local c1, c2, c3
+    local c1
+    local c2
+    local c3
 
     local function dc()
         text.Visible = false
         text:Remove()
-        if c1 then c1:Disconnect() c1 = nil end
-        if c2 then c2:Disconnect() c2 = nil end
-        if c3 then c3:Disconnect() c3 = nil end
+        if c1 then
+            c1:Disconnect()
+            c1 = nil 
+        end
+        if c2 then
+            c2:Disconnect()
+            c2 = nil 
+        end
+        if c3 then
+            c3:Disconnect()
+            c3 = nil 
+        end
     end
 
-    -- Remove ESP if character is deleted
-    c2 = cr.AncestryChanged:Connect(function(_, parent)
+    c2 = cr.AncestryChanged:Connect(function(_,parent)
         if not parent then
             dc()
         end
     end)
 
-    -- Remove ESP on death
     c3 = h.HealthChanged:Connect(function(v)
-        if v <= 0 or h:GetState() == Enum.HumanoidStateType.Dead then
+        if (v<=0) or (h:GetState() == Enum.HumanoidStateType.Dead) then
             dc()
         end
     end)
 
-    -- Update ESP every frame
     c1 = rs.RenderStepped:Connect(function()
-        if not h or h.Health <= 0 then
-            text.Visible = false
-            return
-        end
-
-        local pos, onScreen = c:WorldToViewportPoint(hrp.Position)
-        if onScreen and pos.Z > 0 then
-            local offset = Vector2.new(0, 0)
+        local hrp_pos,hrp_onscreen = c:WorldToViewportPoint(hrp.Position)
+        if hrp_onscreen then
+            local offset = Vector2.new(0,0)
 
             if CONFIG.name_esp.position == "Above" then
-                offset = Vector2.new(0, -27)
+                offset = Vector2.new(0,-27)
             elseif CONFIG.name_esp.position == "Below" then
-                offset = Vector2.new(0, 27)
+                offset = Vector2.new(0,27)
             elseif CONFIG.name_esp.position == "Left" then
-                offset = Vector2.new(-50, 0)
+                offset = Vector2.new(-50,0)
             elseif CONFIG.name_esp.position == "Right" then
-                offset = Vector2.new(50, 0)
+                offset = Vector2.new(50,0)
             end
 
-            text.Position = Vector2.new(pos.X, pos.Y) + offset
+            text.Position = Vector2.new(hrp_pos.X, hrp_pos.Y) + offset
             text.Text = p.Name
             text.Visible = true
         else
@@ -274,24 +277,22 @@ local function esp(p, cr)
 end
 
 local function p_added(p)
-    if p == lp then return end
-
     if p.Character then
-        esp(p, p.Character)
+        esp(p,p.Character)
     end
-
     p.CharacterAdded:Connect(function(cr)
-        esp(p, cr)
+        esp(p,cr)
     end)
 end
 
--- Existing players
-for _, p in ipairs(ps:GetPlayers()) do
-    p_added(p)
+for i,p in next, ps:GetPlayers() do 
+    if p ~= lp then
+        p_added(p)
+    end
 end
 
--- New players
 ps.PlayerAdded:Connect(p_added)
+
 
 
 --// ================= SILENT AIM =================
