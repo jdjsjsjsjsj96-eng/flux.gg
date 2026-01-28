@@ -20,8 +20,8 @@ assert(JS, "jumpSettings table not found")
 
 --// ================= VARIABLES =================
 -- Camera Aimbot
-local holding = false
-local target = nil
+local camHolding = false
+local camTarget = nil
 local aimbotKey = Enum.KeyCode[CONFIG.binds['camera aimbot']]
 
 -- WalkSpeed
@@ -33,6 +33,9 @@ local wsKey = Enum.KeyCode[WS.Activation.WalkSpeedKey]
 local jumpEnabled = false
 local defaultJump = 50
 local jumpKey = Enum.KeyCode[JS.Activation.JumpKey]
+
+-- expose cam target for ESP lock inspection
+_G.currentCameraTarget = nil
 
 --// ================= FOV CIRCLE =================
 local FOV = Drawing.new("Circle")
@@ -53,10 +56,10 @@ UIS.InputBegan:Connect(function(input, gpe)
     -- Camera Aimbot
     if CONFIG.camera_aimbot.enabled and input.KeyCode == aimbotKey then
         if CONFIG.camera_aimbot.mode == "Toggle" then
-            holding = not holding
-            if not holding then target = nil end
+            camHolding = not camHolding
+            if not camHolding then camTarget = nil end
         else
-            holding = true
+            camHolding = true
         end
     end
 
@@ -80,18 +83,15 @@ UIS.InputBegan:Connect(function(input, gpe)
 end)
 
 UIS.InputEnded:Connect(function(input)
-    -- Camera Aimbot
     if input.KeyCode == aimbotKey and CONFIG.camera_aimbot.mode == "Hold" then
-        holding = false
-        target = nil
+        camHolding = false
+        camTarget = nil
     end
 
-    -- WalkSpeed
     if input.KeyCode == wsKey and WS.Activation.Mode == "Hold" then
         wsEnabled = false
     end
 
-    -- Jump
     if input.KeyCode == jumpKey and JS.Activation.Mode == "Hold" then
         jumpEnabled = false
     end
@@ -124,7 +124,7 @@ end
 
 --// ================= MAIN LOOP =================
 RunService.RenderStepped:Connect(function()
-    -- Camera Aimbot FOV
+    -- FOV
     if CONFIG.fov_circle.enabled and CONFIG.fov_circle.visibility == "Show" then
         FOV.Visible = true
         FOV.Radius = CONFIG.fov_circle.size
@@ -134,13 +134,15 @@ RunService.RenderStepped:Connect(function()
     end
 
     -- Sticky Aimbot
-    if CONFIG.camera_aimbot.enabled and holding then
-        if not target or not CONFIG.camera_aimbot.sticky then
-            target = GetClosestTarget()
+    if CONFIG.camera_aimbot.enabled and camHolding then
+        if not camTarget or not CONFIG.camera_aimbot.sticky then
+            camTarget = GetClosestTarget()
         end
     else
-        target = nil
+        camTarget = nil
     end
+
+    _G.currentCameraTarget = camTarget
 
     -- WalkSpeed / Jump
     local char = LocalPlayer.Character
@@ -157,218 +159,161 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
---// ================= CAMERA AIM (with X/Y prediction) =================
+--// ================= CAMERA AIM =================
 RunService.RenderStepped:Connect(function()
-    if not CONFIG.camera_aimbot.enabled or not holding or not target then return end
-    local character = target.Parent
-    local hum = character and character:FindFirstChildOfClass("Humanoid")
-    local root = character and character:FindFirstChild("HumanoidRootPart")
+    if not CONFIG.camera_aimbot.enabled or not camHolding or not camTarget then return end
+
+    local char = camTarget.Parent
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
 
     if hum and hum.Health > 0 and root then
         local cf = Camera.CFrame
+        local predicted = camTarget.Position
 
-        -- predicted position
-        local predictedPosition = target.Position
-        if CONFIG.camera_aimbot.prediction and CONFIG.camera_aimbot.prediction.enabled then
-            local velocity = root.Velocity
-            predictedPosition = predictedPosition
-                + Vector3.new(
-                    velocity.X * CONFIG.camera_aimbot.prediction.x,
-                    velocity.Y * CONFIG.camera_aimbot.prediction.y,
-                    velocity.Z * CONFIG.camera_aimbot.prediction.x
-                )
+        if CONFIG.camera_aimbot.prediction.enabled then
+            local vel = root.Velocity
+            predicted += Vector3.new(
+                vel.X * CONFIG.camera_aimbot.prediction.x,
+                vel.Y * CONFIG.camera_aimbot.prediction.y,
+                vel.Z * CONFIG.camera_aimbot.prediction.x
+            )
         end
 
-        local aimCF = CFrame.new(cf.Position, predictedPosition)
-        Camera.CFrame = cf:Lerp(aimCF, CONFIG.camera_aimbot.smoothness)
+        Camera.CFrame = cf:Lerp(CFrame.new(cf.Position, predicted), CONFIG.camera_aimbot.smoothness)
     else
-        target = nil
+        camTarget = nil
     end
 end)
 
---// ================= RESET ON RESPAWN =================
+--// ================= RESET =================
 LocalPlayer.CharacterAdded:Connect(function(char)
     char:WaitForChild("Humanoid")
     char.Humanoid.WalkSpeed = defaultSpeed
     char.Humanoid.JumpPower = defaultJump
-    holding = false
-    target = nil
+    camHolding = false
+    camTarget = nil
 end)
 
---// ================= NAME ESP =================
-local CONFIG = getgenv().Configurations
-if not CONFIG.name_esp.enabled then return end
+--// ================= NAME ESP (LOCK INSPECTION) =================
+if CONFIG.name_esp.enabled then
+    local LOCK = CONFIG.name_esp.lock_inspection
 
-local Camera = workspace.CurrentCamera
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
+    local function esp(player, char)
+        local hum = char:WaitForChild("Humanoid")
+        local hrp = char:WaitForChild("HumanoidRootPart")
 
-local function esp(player, character)
-    local humanoid = character:WaitForChild("Humanoid")
-    local hrp = character:WaitForChild("HumanoidRootPart")
+        local text = Drawing.new("Text")
+        text.Center = true
+        text.Outline = true
+        text.Font = 2
+        text.Size = CONFIG.name_esp.size
 
-    local text = Drawing.new("Text")
-    text.Visible = false
-    text.Center = true
-    text.Outline = true
-    text.Font = 2
-    text.Color = Color3.fromRGB(255,255,255)
-    text.Size = CONFIG.name_esp.size
-
-    local c1, c2, c3
-
-    local function cleanup()
-        text.Visible = false
-        text:Remove()
-        if c1 then c1:Disconnect() c1 = nil end
-        if c2 then c2:Disconnect() c2 = nil end
-        if c3 then c3:Disconnect() c3 = nil end
-    end
-
-    c2 = character.AncestryChanged:Connect(function(_, parent)
-        if not parent then cleanup() end
-    end)
-
-    c3 = humanoid.HealthChanged:Connect(function(hp)
-        if hp <= 0 or humanoid:GetState() == Enum.HumanoidStateType.Dead then
-            cleanup()
+        local function setColor(tbl)
+            text.Color = Color3.fromRGB(tbl[1], tbl[2], tbl[3])
         end
-    end)
 
-    c1 = RunService.RenderStepped:Connect(function()
-        local hrp_pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-        if onScreen then
-            local offset = Vector2.new(0,0)
-            if CONFIG.name_esp.position == "Above" then
-                offset = Vector2.new(0, -27)
-            elseif CONFIG.name_esp.position == "Below" then
-                offset = Vector2.new(0, 27)
-            elseif CONFIG.name_esp.position == "Left" then
-                offset = Vector2.new(-50, 0)
-            elseif CONFIG.name_esp.position == "Right" then
-                offset = Vector2.new(50, 0)
+        local function offset()
+            if CONFIG.name_esp.position == "Above" then return Vector2.new(0,-27)
+            elseif CONFIG.name_esp.position == "Below" then return Vector2.new(0,27)
+            elseif CONFIG.name_esp.position == "Left" then return Vector2.new(-50,0)
+            elseif CONFIG.name_esp.position == "Right" then return Vector2.new(50,0)
             end
-
-            text.Position = Vector2.new(hrp_pos.X, hrp_pos.Y) + offset
-            text.Text = player.Name
-            text.Visible = true
-        else
-            text.Visible = false
+            return Vector2.zero
         end
+
+        RunService.RenderStepped:Connect(function()
+            local pos, vis = Camera:WorldToViewportPoint(hrp.Position)
+            if not vis then text.Visible = false return end
+
+            text.Text = player.Name
+            text.Position = Vector2.new(pos.X, pos.Y) + offset()
+            text.Visible = true
+
+            if LOCK.enabled and _G.currentCameraTarget == hrp then
+                setColor(LOCK.locked_color)
+            else
+                setColor(LOCK.normal_color)
+            end
+        end)
+    end
+
+    for _,p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            if p.Character then esp(p,p.Character) end
+            p.CharacterAdded:Connect(function(c) esp(p,c) end)
+        end
+    end
+
+    Players.PlayerAdded:Connect(function(p)
+        p.CharacterAdded:Connect(function(c) esp(p,c) end)
     end)
 end
-
-local function onPlayerAdded(player)
-    if player.Character then
-        esp(player, player.Character)
-    end
-    player.CharacterAdded:Connect(function(char)
-        esp(player, char)
-    end)
-end
-
-for _, player in ipairs(Players:GetPlayers()) do
-    if player ~= LocalPlayer then
-        onPlayerAdded(player)
-    end
-end
-
-Players.PlayerAdded:Connect(onPlayerAdded)
-
-
-
-
 
 --// ================= SILENT AIM =================
 local SilentConfig = CONFIG.silent_aim
-local silentEnabled = SilentConfig.mode == "Always" and true or false
-local holding = false
+local silentEnabled = SilentConfig.mode == "Always"
+local silentHolding = false
 local silentKey = Enum.KeyCode[SilentConfig.toggleKey]
 
--- Create FOV Circle (matches aimbot style)
-local circle
-pcall(function()
-    circle = Drawing.new("Circle")
-    circle.Color = Color3.fromRGB(table.unpack(CONFIG.fov_circle.color))
-    circle.Thickness = CONFIG.fov_circle.thickness
-    circle.Filled = CONFIG.fov_circle.filled
-    circle.Transparency = SilentConfig.FOVTransparency
-    circle.Radius = SilentConfig.FOVRadius
-    circle.Visible = SilentConfig.FOVVisible and silentEnabled
-end)
+local circle = Drawing.new("Circle")
+circle.Color = Color3.fromRGB(table.unpack(CONFIG.fov_circle.color))
+circle.Thickness = CONFIG.fov_circle.thickness
+circle.Filled = CONFIG.fov_circle.filled
 
--- Function to check if Silent Aim is active
 local function SilentActive()
     if not SilentConfig.enabled then return false end
     if SilentConfig.mode == "Always" then return true end
     if SilentConfig.mode == "Toggle" then return silentEnabled end
-    if SilentConfig.mode == "Hold" then return holding end
-    return false
+    if SilentConfig.mode == "Hold" then return silentHolding end
 end
 
--- Update FOV Circle
 RunService.RenderStepped:Connect(function()
-    if not circle then return end
-    pcall(function()
-        local guiInset = game:GetService("GuiService"):GetGuiInset()
-        circle.Position = Vector2.new(Mouse.X, Mouse.Y + guiInset.Y)
-        circle.Radius = SilentConfig.FOVRadius
-        circle.Transparency = SilentConfig.FOVTransparency
-        circle.Visible = SilentConfig.FOVVisible and SilentActive()
-    end)
+    local inset = GuiService:GetGuiInset()
+    circle.Position = Vector2.new(Mouse.X, Mouse.Y + inset.Y)
+    circle.Radius = SilentConfig.FOVRadius
+    circle.Transparency = SilentConfig.FOVTransparency
+    circle.Visible = SilentConfig.FOVVisible and SilentActive()
 end)
 
--- Input handling
-UIS.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == silentKey then
-        if SilentConfig.mode == "Toggle" then
-            silentEnabled = not silentEnabled
-        elseif SilentConfig.mode == "Hold" then
-            holding = true
-        end
+UIS.InputBegan:Connect(function(i,g)
+    if g then return end
+    if i.KeyCode == silentKey then
+        if SilentConfig.mode == "Toggle" then silentEnabled = not silentEnabled
+        elseif SilentConfig.mode == "Hold" then silentHolding = true end
     end
 end)
 
-UIS.InputEnded:Connect(function(input)
-    if input.KeyCode == silentKey and SilentConfig.mode == "Hold" then
-        holding = false
-    end
+UIS.InputEnded:Connect(function(i)
+    if i.KeyCode == silentKey then silentHolding = false end
 end)
 
--- Find closest target for Silent Aim
-local function GetClosestForSilent()
-    local closest, distance = nil, SilentConfig.FOVRadius
-    for _, v in ipairs(Players:GetPlayers()) do
+local function GetClosestSilent()
+    local best, dist = nil, SilentConfig.FOVRadius
+    for _,v in ipairs(Players:GetPlayers()) do
         if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(SilentConfig.targetPart) then
-            local pos, onScreen = Camera:WorldToScreenPoint(v.Character[SilentConfig.targetPart].Position)
-            if onScreen then
-                local diff = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
-                if diff < distance then
-                    distance = diff
-                    closest = v
-                end
+            local p, ok = Camera:WorldToScreenPoint(v.Character[SilentConfig.targetPart].Position)
+            if ok then
+                local d = (Vector2.new(p.X,p.Y) - Vector2.new(Mouse.X,Mouse.Y)).Magnitude
+                if d < dist then dist = d best = v end
             end
         end
     end
-    return closest
+    return best
 end
 
--- Hook Mouse Hit for Silent Aim
 local mt = getrawmetatable(game)
-setreadonly(mt, false)
-local oldIndex = mt.__index
+setreadonly(mt,false)
+local old = mt.__index
 
-mt.__index = function(self, key)
-    if SilentActive() and self == Mouse and key == "Hit" then
-        local target = GetClosestForSilent()
-        if target and target.Character and target.Character:FindFirstChild(SilentConfig.targetPart) then
-            local part = target.Character[SilentConfig.targetPart]
+mt.__index = function(self,k)
+    if SilentActive() and self == Mouse and k == "Hit" then
+        local t = GetClosestSilent()
+        if t then
+            local part = t.Character[SilentConfig.targetPart]
             return part.CFrame + (part.Velocity * SilentConfig.prediction)
         end
     end
-    return oldIndex(self, key)
+    return old(self,k)
 end
-setreadonly(mt, true)
-
+setreadonly(mt,true)
