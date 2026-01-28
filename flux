@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
+local GuiService = game:GetService("GuiService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -12,7 +13,6 @@ local Mouse = LocalPlayer:GetMouse()
 local CONFIG = getgenv().Configurations
 local WS = getgenv().walkSpeedSettings
 local JS = getgenv().jumpSettings
-local SILENT = CONFIG.silent_aim
 
 assert(CONFIG, "Configurations table not found")
 assert(WS, "walkSpeedSettings table not found")
@@ -34,11 +34,6 @@ local jumpEnabled = false
 local defaultJump = 50
 local jumpKey = Enum.KeyCode[JS.Activation.JumpKey]
 
--- Silent Aim
-local silentEnabled = SILENT.enabled
-local silentHolding = false
-local silentKey = Enum.KeyCode[SILENT.toggleKey]
-
 --// ================= FOV CIRCLE =================
 local FOV = Drawing.new("Circle")
 FOV.Visible = false
@@ -50,29 +45,6 @@ FOV.Color = Color3.fromRGB(
     CONFIG.fov_circle.color[2],
     CONFIG.fov_circle.color[3]
 )
-
--- Silent Aim FOV
-local silentFOV
-pcall(function()
-    silentFOV = Drawing.new("Circle")
-    silentFOV.Color = Color3.fromRGB(255, 255, 255)
-    silentFOV.Thickness = 2
-    silentFOV.Filled = false
-    silentFOV.Transparency = SILENT.FOVTransparency
-    silentFOV.Radius = SILENT.FOVRadius
-    silentFOV.Visible = SILENT.FOVVisible
-end)
-
-local function updateSilentFOV()
-    if not silentFOV then return end
-    pcall(function()
-        local guiInset = game:GetService("GuiService"):GetGuiInset()
-        silentFOV.Position = Vector2.new(Mouse.X, Mouse.Y + guiInset.Y)
-        silentFOV.Radius = SILENT.FOVRadius
-        silentFOV.Transparency = SILENT.FOVTransparency
-        silentFOV.Visible = SILENT.FOVVisible and silentEnabled
-    end)
-end
 
 --// ================= INPUT =================
 UIS.InputBegan:Connect(function(input, gpe)
@@ -105,15 +77,6 @@ UIS.InputBegan:Connect(function(input, gpe)
             jumpEnabled = true
         end
     end
-
-    -- Silent Aim
-    if SILENT.enabled and input.KeyCode == silentKey then
-        if SILENT.mode == "Toggle" then
-            silentHolding = not silentHolding
-        else
-            silentHolding = true
-        end
-    end
 end)
 
 UIS.InputEnded:Connect(function(input)
@@ -131,11 +94,6 @@ UIS.InputEnded:Connect(function(input)
     -- Jump
     if input.KeyCode == jumpKey and JS.Activation.Mode == "Hold" then
         jumpEnabled = false
-    end
-
-    -- Silent Aim
-    if SILENT.enabled and input.KeyCode == silentKey and SILENT.mode == "Hold" then
-        silentHolding = false
     end
 end)
 
@@ -261,7 +219,6 @@ if CONFIG.name_esp.enabled then
 
         ESPs[player] = {Text = text, Humanoid = hum, Head = head}
 
-        -- Clean up when player dies
         hum.Died:Connect(function()
             text:Remove()
             ESPs[player] = nil
@@ -275,7 +232,6 @@ if CONFIG.name_esp.enabled then
         end
     end
 
-    -- Handle existing players
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
             createESP(player)
@@ -285,7 +241,6 @@ if CONFIG.name_esp.enabled then
         end
     end
 
-    -- Handle new players
     Players.PlayerAdded:Connect(function(player)
         if player ~= LocalPlayer then
             createESP(player)
@@ -295,10 +250,8 @@ if CONFIG.name_esp.enabled then
         end
     end)
 
-    -- Handle leaving players
     Players.PlayerRemoving:Connect(removeESP)
 
-    -- Update all ESPs smoothly every frame
     RunService.RenderStepped:Connect(function()
         for player, esp in pairs(ESPs) do
             local hum = esp.Humanoid
@@ -328,5 +281,70 @@ if CONFIG.name_esp.enabled then
     end)
 end
 
---// ================= SILENT AIM UPDATE =================
-RunService.RenderStepped:Connect(updateSilentFOV)
+--// ================= SILENT AIM =================
+--[[ WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk! ]]
+getgenv().Silent = {
+    Enabled = true, 
+    Prediction = 0.18,
+    TargetPart = "HumanoidRootPart",
+    FOVRadius = 200, 
+    FOVVisible = true, 
+    FOVTransparency = 0.5 
+}
+
+local circle
+pcall(function()
+    circle = Drawing.new("Circle")
+    circle.Color = Color3.fromRGB(255, 255, 255)
+    circle.Thickness = 2
+    circle.Filled = false
+    circle.Transparency = getgenv().Silent.FOVTransparency
+    circle.Radius = getgenv().Silent.FOVRadius
+    circle.Visible = getgenv().Silent.FOVVisible
+end)
+
+local function updateFOVCircle()
+    if not circle then return end
+    pcall(function()
+        local guiInset = GuiService:GetGuiInset()
+        circle.Position = Vector2.new(Mouse.X, Mouse.Y + guiInset.Y)
+        circle.Radius = getgenv().Silent.FOVRadius
+        circle.Transparency = getgenv().Silent.FOVTransparency
+        circle.Visible = getgenv().Silent.FOVVisible
+    end)
+end
+
+RunService.RenderStepped:Connect(updateFOVCircle)
+
+local function GetClosestForSilent()
+    local closest, distance = nil, getgenv().Silent.FOVRadius
+    for _, v in ipairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(getgenv().Silent.TargetPart) then
+            local pos, onScreen = Camera:WorldToScreenPoint(v.Character[getgenv().Silent.TargetPart].Position)
+            if onScreen then
+                local diff = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                if diff < distance then
+                    distance = diff
+                    closest = v
+                end
+            end
+        end
+    end
+    return closest
+end
+
+local mt = getrawmetatable(game)
+setreadonly(mt, false)
+local __index = mt.__index
+
+mt.__index = function(self, key)
+    if getgenv().Silent.Enabled and self == Mouse and key == "Hit" then
+        local target = GetClosestForSilent()
+        if target and target.Character and target.Character:FindFirstChild(getgenv().Silent.TargetPart) then
+            local part = target.Character[getgenv().Silent.TargetPart]
+            return (part.CFrame + (part.Velocity * getgenv().Silent.Prediction))
+        end
+    end
+    return __index(self, key)
+end
+setreadonly(mt, true)
