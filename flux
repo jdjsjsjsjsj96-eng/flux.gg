@@ -155,7 +155,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
---// ================= CAMERA AIM (with X/Y prediction) =================
+--// ================= CAMERA AIM (Smoothness 1-100 + X/Y prediction) =================
 RunService.RenderStepped:Connect(function()
     if not CONFIG.camera_aimbot.enabled or not holding or not target then return end
 
@@ -166,20 +166,23 @@ RunService.RenderStepped:Connect(function()
     if hum and hum.Health > 0 and root then
         local cf = Camera.CFrame
 
-        -- predicted position
+        -- Prediction
         local predictedPosition = target.Position
         if CONFIG.camera_aimbot.prediction and CONFIG.camera_aimbot.prediction.enabled then
             local velocity = root.Velocity
-            predictedPosition = predictedPosition
-                + Vector3.new(
-                    velocity.X * CONFIG.camera_aimbot.prediction.x, -- horizontal
-                    velocity.Y * CONFIG.camera_aimbot.prediction.y, -- vertical
-                    velocity.Z * CONFIG.camera_aimbot.prediction.x  -- horizontal/depth
-                )
+            predictedPosition = predictedPosition + Vector3.new(
+                velocity.X * CONFIG.camera_aimbot.prediction.x, -- X lead
+                velocity.Y * CONFIG.camera_aimbot.prediction.y, -- Y lead
+                velocity.Z * CONFIG.camera_aimbot.prediction.x  -- Z / forward lead
+            )
         end
 
+        -- Smoothness (1-100 → 0.01-1.0)
+        local smoothness = math.clamp(CONFIG.camera_aimbot.smoothness, 1, 100)
+        local lerpAlpha = smoothness / 100
+
         local aimCF = CFrame.new(cf.Position, predictedPosition)
-        Camera.CFrame = cf:Lerp(aimCF, CONFIG.camera_aimbot.smoothness)
+        Camera.CFrame = cf:Lerp(aimCF, lerpAlpha)
     else
         target = nil
     end
@@ -203,7 +206,7 @@ if CONFIG.name_esp.enabled then
         local text = Drawing.new("Text")
         text.Visible = false
         text.Center = true
-        text.Outline = true -- make it visible on all backgrounds
+        text.Outline = true
         text.Font = 3
         text.Size = CONFIG.name_esp.size
         text.Color = Color3.fromRGB(table.unpack(CONFIG.name_esp.color))
@@ -217,7 +220,7 @@ if CONFIG.name_esp.enabled then
             end
 
             local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-            if onScreen and headPos.Z > 0 then -- make sure it's in front of camera
+            if onScreen and headPos.Z > 0 then
                 local offset = Vector2.new(0,0)
                 if CONFIG.name_esp.position == "Above" then offset = Vector2.new(0,-27)
                 elseif CONFIG.name_esp.position == "Below" then offset = Vector2.new(0,27)
