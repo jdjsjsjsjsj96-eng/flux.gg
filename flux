@@ -416,7 +416,12 @@ local function esp(player, character)
 
     local function destroy()
         text.Visible = false
-        text:Remove()
+if text then
+    text.Visible = false
+    text:Remove() -- or :Destroy() depending on exploit
+    text = nil
+end
+
         if c1 then c1:Disconnect() c1 = nil end
         if c2 then c2:Disconnect() c2 = nil end
         if c3 then c3:Disconnect() c3 = nil end
