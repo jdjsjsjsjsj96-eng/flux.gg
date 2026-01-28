@@ -184,19 +184,32 @@ if CONFIG.name_esp.enabled then
         local hum = character:WaitForChild("Humanoid")
         local head = character:WaitForChild("Head")
 
-        local text = Drawing.new("Text")
-        text.Visible = false
-        text.Center = true
-        text.Outline = CONFIG.name_esp.outline -- Enable/disable outline
-        text.OutlineColor = Color3.fromRGB(unpack(CONFIG.name_esp.outline_color)) -- Outline color
-        text.Font = 3
-        text.Size = CONFIG.name_esp.size
-        text.Color = Color3.fromRGB(unpack(CONFIG.name_esp.color))
+        -- Main text
+        local mainText = Drawing.new("Text")
+        mainText.Visible = false
+        mainText.Center = true
+        mainText.Font = 3
+        mainText.Size = CONFIG.name_esp.size
+        mainText.Color = Color3.fromRGB(unpack(CONFIG.name_esp.color))
+
+        -- Outline texts (simulate bold outline)
+        local offsets = {Vector2.new(-1,0), Vector2.new(1,0), Vector2.new(0,-1), Vector2.new(0,1)}
+        local outlines = {}
+        for i = 1, #offsets do
+            local t = Drawing.new("Text")
+            t.Visible = false
+            t.Center = true
+            t.Font = 3
+            t.Size = CONFIG.name_esp.size
+            t.Color = Color3.fromRGB(unpack(CONFIG.name_esp.outline_color))
+            table.insert(outlines, t)
+        end
 
         local conn
         conn = RunService.RenderStepped:Connect(function()
             if hum.Health <= 0 or not character.Parent then
-                text:Remove()
+                mainText:Remove()
+                for _, t in ipairs(outlines) do t:Remove() end
                 conn:Disconnect()
                 return
             end
@@ -210,11 +223,22 @@ if CONFIG.name_esp.enabled then
                 elseif CONFIG.name_esp.position == "Right" then offset = Vector2.new(50,0)
                 end
 
-                text.Position = Vector2.new(headPos.X, headPos.Y) + offset
-                text.Text = "[ "..player.Name.." ]"
-                text.Visible = true
+                local finalPos = Vector2.new(headPos.X, headPos.Y) + offset
+
+                -- Update outline positions
+                for i, t in ipairs(outlines) do
+                    t.Position = finalPos + offsets[i]
+                    t.Text = "[ "..player.Name.." ]"
+                    t.Visible = true
+                end
+
+                -- Update main text
+                mainText.Position = finalPos
+                mainText.Text = "[ "..player.Name.." ]"
+                mainText.Visible = true
             else
-                text.Visible = false
+                mainText.Visible = false
+                for _, t in ipairs(outlines) do t.Visible = false end
             end
         end)
     end
@@ -231,4 +255,3 @@ if CONFIG.name_esp.enabled then
     end
     Players.PlayerAdded:Connect(onPlayerAdded)
 end
-
