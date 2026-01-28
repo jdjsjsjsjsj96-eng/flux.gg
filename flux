@@ -1,6 +1,6 @@
 
 --// ================= KEY SYSTEM =================
-local pastebin_url = "https://pastebin.com/raw/YOUR_PASTEBIN_ID"
+local pastebin_url = "https://pastebin.com/raw/iqUqidPB"
 
 if not script_key then
     warn("[KeySystem] No key provided.")
