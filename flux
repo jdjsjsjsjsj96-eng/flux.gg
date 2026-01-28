@@ -298,12 +298,19 @@ circle.Transparency = SilentConfig.FOV.transparency
 circle.Radius = SilentConfig.FOV.radius
 circle.Visible = SilentConfig.FOV.visible and silentEnabled
 
--- Create Tracer
-local tracer = Drawing.new("Line")
-tracer.Visible = false
-tracer.Thickness = 1
-tracer.Color = Color3.fromRGB(255, 255, 255)
-tracer.Transparency = 1
+-- GUI Tracer (mouse → HumanoidRootPart)
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local tracerLine = Instance.new("Frame")
+tracerLine.BackgroundColor3 = Color3.new(1, 1, 1) -- white
+tracerLine.BorderSizePixel = 0
+tracerLine.AnchorPoint = Vector2.new(0.5, 0.5)
+tracerLine.Size = UDim2.new(0, 2, 0, 2) -- initial tiny size
+tracerLine.Position = UDim2.new(0, 0, 0, 0)
+tracerLine.Rotation = 0
+tracerLine.Visible = false
+tracerLine.Parent = screenGui
 
 -- Check if Silent Aim is active
 local function SilentActive()
@@ -314,11 +321,11 @@ local function SilentActive()
     return false
 end
 
--- Visibility function for Silent Aim
+-- Visibility check
 local function IsVisible(part, character)
     if not part or not character then return false end
     if not CONFIG.visibility or not CONFIG.visibility.enabled then
-        return true -- visibility disabled in config
+        return true
     end
 
     local origin = Camera.CFrame.Position
@@ -326,25 +333,23 @@ local function IsVisible(part, character)
 
     local rayParams = RaycastParams.new()
     rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-    rayParams.FilterDescendantsInstances = {
-        LocalPlayer.Character,
-        character
-    }
+    rayParams.FilterDescendantsInstances = {LocalPlayer.Character, character}
     rayParams.IgnoreWater = true
 
     local result = Workspace:Raycast(origin, direction, rayParams)
     return result == nil
 end
 
--- Get target for silent aim based on selected part
+-- Get closest target for Silent Aim
 local function GetClosestForSilent()
     local closest, distance = nil, SilentConfig.FOV.radius
     local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character then
             local targetPart
+
             if SilentConfig.selectedPart == "Closest" then
-                -- find the closest part from parts list
                 local shortest = math.huge
                 for _, partName in ipairs(SilentConfig.parts) do
                     if partName ~= "Closest" and plr.Character:FindFirstChild(partName) then
@@ -378,36 +383,42 @@ local function GetClosestForSilent()
             end
         end
     end
+
     return closest
 end
 
--- Tracer (mouse -> HumanoidRootPart)
-local target = GetClosestForSilent()
-if SilentActive() and target and target.Parent then
-    local hrp = target.Parent:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        local hrpPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-        if onScreen then
-            local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-            local diff = (Vector2.new(hrpPos.X, hrpPos.Y) - mousePos).Magnitude
+-- Update FOV & Tracer
+RunService.RenderStepped:Connect(function()
+    -- FOV circle
+    circle.Position = Vector2.new(Mouse.X, Mouse.Y)
+    circle.Radius = SilentConfig.FOV.radius
+    circle.Visible = SilentConfig.FOV.visible and SilentActive()
 
-            if diff <= SilentConfig.FOV.radius then
-                tracer.From = mousePos
-                tracer.To = Vector2.new(hrpPos.X, hrpPos.Y)
-                tracer.Visible = true
+    -- Tracer line
+    local target = GetClosestForSilent()
+    if SilentActive() and target and target.Parent then
+        local hrp = target.Parent:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local hrpPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+            if onScreen then
+                local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+                local targetPos = Vector2.new(hrpPos.X, hrpPos.Y)
+                local angle = math.atan2(targetPos.Y - mousePos.Y, targetPos.X - mousePos.X)
+
+                tracerLine.Position = UDim2.new(0, (mousePos.X + targetPos.X)/2, 0, (mousePos.Y + targetPos.Y)/2)
+                tracerLine.Size = UDim2.new(0, 2, 0, (targetPos - mousePos).Magnitude)
+                tracerLine.Rotation = math.deg(angle)
+                tracerLine.Visible = true
             else
-                tracer.Visible = false
+                tracerLine.Visible = false
             end
         else
-            tracer.Visible = false
+            tracerLine.Visible = false
         end
     else
-        tracer.Visible = false
+        tracerLine.Visible = false
     end
-else
-    tracer.Visible = false
-end
-
+end)
 
 -- Input handling
 UIS.InputBegan:Connect(function(input, gpe)
@@ -444,4 +455,3 @@ mt.__index = function(self, key)
     return oldIndex(self, key)
 end
 setreadonly(mt, true)
-
