@@ -307,7 +307,7 @@ local silentEnabled = SilentConfig.mode == "Always"
 local silentHolding = false
 local silentKey = Enum.KeyCode[SilentConfig.toggleKey] or Enum.KeyCode.Unknown
 
--- Create FOV Circle (matches aimbot style)
+-- Create FOV Circle
 local circle = Drawing.new("Circle")
 circle.Color = Color3.fromRGB(table.unpack(CONFIG.fov_circle.color))
 circle.Thickness = CONFIG.fov_circle.thickness
@@ -362,9 +362,9 @@ RunService.RenderStepped:Connect(function()
     -- Update Tracer
     local target = GetClosestForSilent()
     if SilentActive() and target and target.Character then
-        local head = target.Character:FindFirstChild(SilentConfig.targetPart)
-        if head then
-            local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+        local hrp = target.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
             if onScreen then
                 local mousePos = Vector2.new(Mouse.X, Mouse.Y)
                 local diff = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
