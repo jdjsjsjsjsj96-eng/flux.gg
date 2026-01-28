@@ -155,14 +155,30 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
---// ================= CAMERA AIM =================
+--// ================= CAMERA AIM (with X/Y prediction) =================
 RunService.RenderStepped:Connect(function()
     if not CONFIG.camera_aimbot.enabled or not holding or not target then return end
 
-    local hum = target.Parent:FindFirstChildOfClass("Humanoid")
-    if hum and hum.Health > 0 then
+    local character = target.Parent
+    local hum = character and character:FindFirstChildOfClass("Humanoid")
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+
+    if hum and hum.Health > 0 and root then
         local cf = Camera.CFrame
-        local aimCF = CFrame.new(cf.Position, target.Position)
+
+        -- predicted position
+        local predictedPosition = target.Position
+        if CONFIG.camera_aimbot.prediction and CONFIG.camera_aimbot.prediction.enabled then
+            local velocity = root.Velocity
+            predictedPosition = predictedPosition
+                + Vector3.new(
+                    velocity.X * CONFIG.camera_aimbot.prediction.x, -- horizontal
+                    velocity.Y * CONFIG.camera_aimbot.prediction.y, -- vertical
+                    velocity.Z * CONFIG.camera_aimbot.prediction.x  -- horizontal/depth
+                )
+        end
+
+        local aimCF = CFrame.new(cf.Position, predictedPosition)
         Camera.CFrame = cf:Lerp(aimCF, CONFIG.camera_aimbot.smoothness)
     else
         target = nil
