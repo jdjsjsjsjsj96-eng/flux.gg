@@ -1,4 +1,3 @@
-
 --// ================= KEY SYSTEM =================
 local pastebin_url = "https://pastebin.com/raw/iqUqidPB"
 
@@ -30,7 +29,6 @@ if not valid then
 end
 
 print("[KeySystem] Key accepted.")
-
 
 --// ================= SERVICES =================
 local Players = game:GetService("Players")
@@ -321,6 +319,13 @@ pcall(function()
     circle.Visible = SilentConfig.FOVVisible and silentEnabled
 end)
 
+--// ================= SILENT AIM TRACER =================
+local tracer = Drawing.new("Line")
+tracer.Visible = false
+tracer.Thickness = 1
+tracer.Color = Color3.fromRGB(255, 255, 255)
+tracer.Transparency = 1
+
 local function SilentActive()
     if not SilentConfig.enabled then return false end
     if SilentConfig.mode == "Always" then return true end
@@ -329,15 +334,35 @@ local function SilentActive()
     return false
 end
 
--- Update FOV Circle
+-- Update FOV Circle & Tracer
 RunService.RenderStepped:Connect(function()
     if not circle then return end
     pcall(function()
-        local guiInset = game:GetService("GuiService"):GetGuiInset()
+        local guiInset = GuiService:GetGuiInset()
         circle.Position = Vector2.new(Mouse.X, Mouse.Y + guiInset.Y)
         circle.Radius = SilentConfig.FOVRadius
         circle.Transparency = SilentConfig.FOVTransparency
         circle.Visible = SilentConfig.FOVVisible and SilentActive()
+
+        -- Tracer
+        local target = GetClosestForSilent()
+        if SilentActive() and target and target.Character then
+            local part = target.Character:FindFirstChild(SilentConfig.targetPart)
+            if part then
+                local pos, onScreen = Camera:WorldToScreenPoint(part.Position)
+                local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+                local diff = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                if onScreen and diff <= SilentConfig.FOVRadius then
+                    tracer.From = mousePos
+                    tracer.To = Vector2.new(pos.X, pos.Y)
+                    tracer.Visible = true
+                else
+                    tracer.Visible = false
+                end
+            end
+        else
+            tracer.Visible = false
+        end
     end)
 end)
 
@@ -360,7 +385,7 @@ UIS.InputEnded:Connect(function(input)
 end)
 
 -- Find closest target for Silent Aim
-local function GetClosestForSilent()
+function GetClosestForSilent()
     local closest, distance = nil, SilentConfig.FOVRadius
     for _, v in ipairs(Players:GetPlayers()) do
         if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild(SilentConfig.targetPart) then
