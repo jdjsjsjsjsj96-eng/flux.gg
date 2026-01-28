@@ -196,53 +196,90 @@ end)
 
 --// ================= NAME ESP =================
 if CONFIG.name_esp.enabled then
-    local function createESP(player, character)
-        local hum = character:WaitForChild("Humanoid")
-        local head = character:WaitForChild("Head")
+    local ESPs = {} -- store ESPs per player
+
+    local function createESP(player)
+        if ESPs[player] then return end -- already exists
+        local character = player.Character
+        if not character then return end
+
+        local hum = character:FindFirstChild("Humanoid")
+        local head = character:FindFirstChild("Head")
+        if not hum or not head then return end
 
         local text = Drawing.new("Text")
         text.Visible = false
         text.Center = true
-        text.Outline = true -- make it visible on all backgrounds
+        text.Outline = true
         text.Font = 3
         text.Size = CONFIG.name_esp.size
         text.Color = Color3.fromRGB(table.unpack(CONFIG.name_esp.color))
 
-        local conn
-        conn = RunService.RenderStepped:Connect(function()
-            if not hum or hum.Health <= 0 or not character.Parent then
-                text:Remove()
-                conn:Disconnect()
-                return
-            end
+        ESPs[player] = {Text = text, Humanoid = hum, Head = head}
 
-            local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-            if onScreen and headPos.Z > 0 then -- make sure it's in front of camera
-                local offset = Vector2.new(0,0)
-                if CONFIG.name_esp.position == "Above" then offset = Vector2.new(0,-27)
-                elseif CONFIG.name_esp.position == "Below" then offset = Vector2.new(0,27)
-                elseif CONFIG.name_esp.position == "Left" then offset = Vector2.new(-50,0)
-                elseif CONFIG.name_esp.position == "Right" then offset = Vector2.new(50,0)
-                end
-
-                text.Position = Vector2.new(headPos.X, headPos.Y) + offset
-                text.Text = "[ "..player.Name.." ]"
-                text.Visible = true
-            else
-                text.Visible = false
-            end
+        -- clean up when character dies
+        hum.Died:Connect(function()
+            if text then text:Remove() end
+            ESPs[player] = nil
         end)
     end
 
-    local function onPlayerAdded(player)
-        if player ~= LocalPlayer then
-            if player.Character then createESP(player, player.Character) end
-            player.CharacterAdded:Connect(function(char) createESP(player, char) end)
+    local function removeESP(player)
+        if ESPs[player] then
+            if ESPs[player].Text then ESPs[player].Text:Remove() end
+            ESPs[player] = nil
         end
     end
 
+    -- create ESP for existing players
     for _, player in ipairs(Players:GetPlayers()) do
-        onPlayerAdded(player)
+        if player ~= LocalPlayer then
+            createESP(player)
+            player.CharacterAdded:Connect(function()
+                createESP(player)
+            end)
+        end
     end
-    Players.PlayerAdded:Connect(onPlayerAdded)
+
+    -- auto-create/remove ESP when players join/leave
+    Players.PlayerAdded:Connect(function(player)
+        if player ~= LocalPlayer then
+            createESP(player)
+            player.CharacterAdded:Connect(function()
+                createESP(player)
+            end)
+        end
+    end)
+    Players.PlayerRemoving:Connect(removeESP)
+
+    -- update ESPs every 0.5 seconds
+    spawn(function()
+        while true do
+            for player, esp in pairs(ESPs) do
+                local hum = esp.Humanoid
+                local head = esp.Head
+                local text = esp.Text
+
+                if hum and hum.Health > 0 and head and head.Parent then
+                    local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                    if onScreen and headPos.Z > 0 then
+                        local offset = Vector2.new(0,0)
+                        if CONFIG.name_esp.position == "Above" then offset = Vector2.new(0,-27)
+                        elseif CONFIG.name_esp.position == "Below" then offset = Vector2.new(0,27)
+                        elseif CONFIG.name_esp.position == "Left" then offset = Vector2.new(-50,0)
+                        elseif CONFIG.name_esp.position == "Right" then offset = Vector2.new(50,0)
+                        end
+                        text.Position = Vector2.new(headPos.X, headPos.Y) + offset
+                        text.Text = "[ "..player.Name.." ]"
+                        text.Visible = true
+                    else
+                        text.Visible = false
+                    end
+                else
+                    text.Visible = false
+                end
+            end
+            task.wait(0.5) -- refresh every 0.5s
+        end
+    end)
 end
