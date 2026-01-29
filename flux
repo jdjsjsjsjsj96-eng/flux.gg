@@ -67,6 +67,100 @@ local jumpEnabled = false
 local defaultJump = 50
 local jumpKey = Enum.KeyCode[JS.Activation.JumpKey] or Enum.KeyCode.Unknown
 
+--// ================= NAME ESP ONLY =================
+local NameESP = {}
+
+-- CONFIG EXPECTED:
+-- CONFIG.name_esp.enabled
+-- CONFIG.name_esp.size
+-- CONFIG.name_esp.color
+-- CONFIG.visibility.name_esp (optional)
+
+--// ================= VISIBILITY CHECK =================
+local function IsVisible(part, character)
+    if not CONFIG.visibility or not CONFIG.visibility.name_esp then
+        return true
+    end
+
+    local origin = Camera.CFrame.Position
+    local direction = part.Position - origin
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    params.FilterDescendantsInstances = { LocalPlayer.Character, character }
+    params.IgnoreWater = true
+
+    return Workspace:Raycast(origin, direction, params) == nil
+end
+
+--// ================= CREATE NAME ESP =================
+local function CreateNameESP(player)
+    if player == LocalPlayer then return end
+
+    local text = Drawing.new("Text")
+    text.Size = CONFIG.name_esp.size or 13
+    text.Center = true
+    text.Outline = true
+    text.Font = 2
+    text.Color = Color3.fromRGB(
+        CONFIG.name_esp.color[1],
+        CONFIG.name_esp.color[2],
+        CONFIG.name_esp.color[3]
+    )
+    text.Visible = false
+
+    NameESP[player] = text
+end
+
+--// ================= REMOVE NAME ESP =================
+local function RemoveNameESP(player)
+    if NameESP[player] then
+        NameESP[player]:Remove()
+        NameESP[player] = nil
+    end
+end
+
+--// ================= PLAYER HANDLING =================
+for _, plr in ipairs(Players:GetPlayers()) do
+    CreateNameESP(plr)
+end
+
+Players.PlayerAdded:Connect(CreateNameESP)
+Players.PlayerRemoving:Connect(RemoveNameESP)
+
+--// ================= RENDER LOOP =================
+RunService.RenderStepped:Connect(function()
+    if not CONFIG.name_esp.enabled then
+        for _, text in pairs(NameESP) do
+            text.Visible = false
+        end
+        return
+    end
+
+    for plr, text in pairs(NameESP) do
+        local char = plr.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+
+        if hum and root and hum.Health > 0 then
+            -- position BELOW FEET
+            local footPos = root.Position - Vector3.new(0, hum.HipHeight + 1.5, 0)
+            local pos, onScreen = Camera:WorldToViewportPoint(footPos)
+
+            if onScreen and IsVisible(root, char) then
+                text.Text = plr.Name
+                text.Position = Vector2.new(pos.X, pos.Y)
+                text.Visible = true
+            else
+                text.Visible = false
+            end
+        else
+            text.Visible = false
+        end
+    end
+end)
+
+
 --// ================= FOV CIRCLE =================
 local FOV = Drawing.new("Circle")
 FOV.Visible = false
