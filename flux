@@ -76,8 +76,8 @@ local NameESP = {}
 -- CONFIG.name_esp.color
 -- CONFIG.visibility.name_esp (optional)
 
---// ================= VISIBILITY CHECK =================
-local function IsVisible(part, character)
+--// ================= VISIBILITY CHECK FOR NAME ESP =================
+local function IsNameESPVisible(part, character)
     if not CONFIG.visibility or not CONFIG.visibility.name_esp then
         return true
     end
@@ -128,7 +128,7 @@ end
 Players.PlayerAdded:Connect(CreateNameESP)
 Players.PlayerRemoving:Connect(RemoveNameESP)
 
---// ================= RENDER LOOP =================
+--// ================= RENDER LOOP FOR NAME ESP =================
 RunService.RenderStepped:Connect(function()
     if not CONFIG.name_esp.enabled then
         for _, text in pairs(NameESP) do
@@ -147,7 +147,7 @@ RunService.RenderStepped:Connect(function()
             local footPos = root.Position - Vector3.new(0, hum.HipHeight + 1.5, 0)
             local pos, onScreen = Camera:WorldToViewportPoint(footPos)
 
-            if onScreen and IsVisible(root, char) then
+            if onScreen and IsNameESPVisible(root, char) then
                 text.Text = plr.Name
                 text.Position = Vector2.new(pos.X, pos.Y)
                 text.Visible = true
@@ -159,7 +159,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
 end)
-
 
 --// ================= FOV CIRCLE =================
 local FOV = Drawing.new("Circle")
