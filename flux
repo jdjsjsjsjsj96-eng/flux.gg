@@ -1,4 +1,4 @@
-can we turn this into a internal --// ================= KEY SYSTEM =================
+--// ================= KEY SYSTEM =================
 local pastebin_url = "https://pastebin.com/raw/iqUqidPB"
 
 if not script_key then
